@@ -1,0 +1,46 @@
+%% Header 
+
+% Homework Specific Parameters
+
+% Clear Previous Info
+clear all
+clc
+
+% Add Path
+Parameters;
+
+%% Initial Conditions
+x_0 = [0;0;0];
+
+%% Input Parameters
+input       = 'sine';  % Type of signal
+period      = 100;        % Period of signal input
+amplitude   = 0.5;        % Amplitude of signal input
+offset      = 0;            % Offset from 0
+phase_delay = 0;        % phase delay of function in rad
+r = function_generator(input,period,amplitude,offset,phase_delay,t);
+
+%% Simulation Parameters
+settings.animation   = true;
+settings.real_time   = false;
+settings.loopshaping = true;
+settings.simulate    = false;
+settings.plot_names  = {["z - Pitch (m)","\theta"];
+                        ["e - Observer Error","\phi"];
+                        ["F - Force (N)","\psi"]};
+                    
+% Display warnings?
+warning('off','all')
+
+%% Publish Data
+core.publish("x",x_0)
+core.publish("x_hat",x_0)
+core.publish("u",u_0)
+core.publish_list("r",r)
+core.publish_list("t",t)
+core.settings = settings;
+core.param = param;
+core.functions = functions;
+
+%% Run Program
+Simulation;
