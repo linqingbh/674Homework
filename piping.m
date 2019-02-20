@@ -30,6 +30,11 @@ classdef piping < handle
             end
         end
         
+        function publish_specific(self,name,data,history_index)
+            index = strcmp(name,[self.topic_names{1:end}]);
+            self.topics{index}{history_index} = data;
+        end
+        
         function data = subscribe(self,name)
             index = strcmp(name,[self.topic_names{1:end}]);
             if any(index)

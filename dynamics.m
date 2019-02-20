@@ -13,6 +13,7 @@ classdef dynamics < handle
         eqs_motion
         controllers
         observers
+        controller_architecture
         D_in_param
         D_in_u
         D_out
@@ -24,6 +25,7 @@ classdef dynamics < handle
         implement_uncertainty
         u_names
         x_names
+        y_r
     end
     
     methods
@@ -46,6 +48,8 @@ classdef dynamics < handle
             self.eqs_motion = functions.eqs_motion;
             self.controllers = functions.controllers;
             self.observers = functions.observers;
+            self.controller_architecture = functions.controller_architecture;
+            self.y_r = functions.y_r;
             
             % Simulation Parameters
             self.time = settings.start;
@@ -83,20 +87,25 @@ classdef dynamics < handle
                 self.u = self.uncertainty(self.u,self.D_in_u,self.uncertian_u);
             end
             
+%             if abs(new_state(5))>10
+%                 throw = 1;
+%             end
+            
             % Runga Kuta
-            k1 = self.eqs_motion(self.time,self.x,self.u,self.param);
-            k2 = self.eqs_motion(self.time,self.x + self.step/2*k1, self.u,self.param);
-            k3 = self.eqs_motion(self.time,self.x + self.step/2*k2, self.u,self.param);
-            k4 = self.eqs_motion(self.time,self.x + self.step*k3, self.u,self.param);
+            k1 = self.eqs_motion(self.step,self.x,self.u,self.core);
+            k2 = self.eqs_motion(self.step,self.x + self.step/2*k1, self.u,self.core);
+            k3 = self.eqs_motion(self.step,self.x + self.step/2*k2, self.u,self.core);
+            k4 = self.eqs_motion(self.step,self.x + self.step*k3, self.u,self.core);
             new_state = self.x + self.step/6 * (k1 + 2*k2 + 2*k3 + k4);
 
             % Impliment uncertainty
             if self.implement_uncertainty
                 new_state = self.uncertainty(new_state,self.D_out,self.uncertian_x);
             end
-                
+              
             % Pack results
             self.x = new_state;
+            
         end
         
         function simulate(self)
@@ -107,7 +116,15 @@ classdef dynamics < handle
             % Iterate through each timestep
             for i = 1:length(r)-1
                 
+                self.time = t(i+1);
+                
+                if self.time >=15.9
+                    throw = 1;
+                end
+                
                 self.x = self.propagate();
+                
+                [y_r,y_r_dot] = self.y_r(self.x,self.core);
                 
                 % Impliment uncertianty
                 if self.implement_uncertainty
@@ -125,10 +142,11 @@ classdef dynamics < handle
                 end
                     
                 % Implimennt controller
-                for j = 1:length(self.controllers)
-                    indexes = self.get_indexes(self.u_names,self.controllers(j).output_names);
-                    self.u(indexes) = self.controllers(j).control(measurements,r(:,i),d_hat(j));
-                end
+                self.u = self.controller_architecture(self.controllers,measurements,r(:,i),d_hat,self.param);
+%                 for j = 1:length(self.controllers)
+%                     indexes = self.get_indexes(self.u_names,self.controllers(j).output_names);
+%                     self.u(indexes) = self.controllers(j).control(measurements,r(:,i),d_hat(j));
+%                 end
                     
                 % Save history
                 self.core.publish('u',self.u);
@@ -136,6 +154,8 @@ classdef dynamics < handle
                 
                 % Simulate Responce to new input
                 self.core.publish('x',self.x);
+                self.core.publish('y_r',y_r);
+                self.core.publish('y_r_dot',y_r_dot);
             end
         end
         

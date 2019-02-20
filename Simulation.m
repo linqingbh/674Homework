@@ -9,10 +9,10 @@ if settings.simulate
     animation = animate(core);  
 
     % Object simulating the system
-    % system = dynamics(core);
+    system = dynamics(core);
 
     % Simulate the system
-    % system.simulate(); 
+    system.simulate(); 
 
     % Display results                                            
     animation.play();
