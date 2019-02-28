@@ -1,42 +1,38 @@
 classdef observers < handle
     
     properties
-        A
-        B
-        C_m
-        L
-        u_e
-        x_e
-        dt
-        x_hat
+        % General to pass to other functions
         param
+
+        % States
+        x_e
+        u_e
+        x_hat
         x_indexes
+        m_indexes
+        r_indexes
         u_indexes
-        y_m_indexes
-        x_names
-        u_names
-        y_m_names
-        use_names
-        output_names
+        position
+        velocity
+
+        % Param
+        L
+
+        % Settings
         type
-        sigma
-        old_x
-        core
-        x
-        beta
-        d_hat
-        t_gps
-        t_sensor
+        m_is_angle
+        
+        % Defaults
+        t = 0;
+        d_hat = 0;
+        convert = @(in) in
     end
     
     properties (Constant)
-        O = 'Observer';
-        de = 'Dirivative based on error';
-        dp = 'Dirivative based on position';
-        m = 'Measure';
-        e = 'exact';
-        gps = 'gps';
-        RateGyro = 'reat'
+        exact = 'Exact'
+        luenberger = 'Luenberger Observer'
+        de = 'Dirivative based on error'
+        dy = 'Dirivative based on state'
     end
     
     methods
@@ -44,166 +40,92 @@ classdef observers < handle
             
             % Unpack
             param = core.param;
-            settings = core.settings;
             functions = core.functions;
             
-            % Observer settings
-            self.type = observe.type;
-            switch self.type
-                case self.O
-                    self.L = observe.L;
-                case self.de
-                    self.sigma = observe.L;
-                    self.x = param.x_0;
-                    self.L = observe.L;
-                case self.dp
-                    self.sigma = observe.L;
-                    self.L = observe.L;
-                case self.e
-                    
-                case self.m
-                    self.sensors = observe.sensor_update_rates
-                otherwise
-                    % Parmeters
-                    self.x_names = param.x_names;
-                    self.u_names = param.u_names;
-                    self.x_e = param.x_e(self.get_indexes(param.x_names,observe.x_names));
-                    self.y_m_names = param.x_names(param.C_m*(1:length(self.x_hat)).'); 
-                    self.x_indexes = self.get_indexes(self.x_names,self.output_names);
-                    self.u_indexes = self.get_indexes(self.u_names,self.use_names);
-                    self.y_m_indexes = self.get_indexes(self.y_m_names,self.output_names);
-                    self.A = param.A(self.x_indexes,self.x_indexes);
-                    self.B = param.B(self.x_indexes,self.u_indexes);
-                    self.C_m = param.C_m(self.y_m_indexes,self.x_indexes);
-                    self.x_hat = self.x_hat(self.x_indexes);
-                    self.dt = settings.step;
-                    self.u_e = functions.u_e(self.x_e,param);
-                    self.u_e = self.u_e(self.get_indexes(param.u_names,observe.u_names));
-            end
-            
-            self.output_names = observe.x_names;
-            self.use_names = observe.u_names;
-            
-            % Initalize
-            self.x_hat = core.subscribe('x_hat');
-            self.x = core.subscribe('x');
-            self.d_hat = 0;
-            self.t_sensor = -Inf;
-
-            % Parmeters
-            self.x_names = param.x_names;
-            self.u_names = param.u_names;
-            self.x_e = param.x_e(self.get_indexes(param.x_names,observe.x_names));
-            self.x_indexes = self.get_indexes(self.x_names,self.output_names);
-            self.u_indexes = self.get_indexes(self.u_names,self.use_names);
-            self.x_hat = self.x_hat(self.x_indexes);
-            self.dt = settings.step;
-            self.u_e = functions.u_e(self.x_e,param);
-            self.u_e = self.u_e(self.get_indexes(param.u_names,observe.u_names));
-
-            % General
+            % General to pass to other functions
             self.param = param;
-            self.core = core;
-        end
-        
-        function x_hat_dot = observer_eqs(self,x_hat,y_m,u)
-            x_hat_dot = self.A*(x_hat - self.x_e) + self.B*(u-self.u_e + self.d_hat) + self.L.L*(y_m - self.C_m*x_hat);
-        end
-        
-        function d_hat_dot = dist_eqs(self,x_hat,y_m)
-            d_hat_dot = self.L.d*(y_m - self.C_m*x_hat);
-        end
-        
-        function update_gps(self)
-        end
-        
-        function update_rate_gyros(self)
-        end
-        
-        function update_accelorometers(self)
-        end
-        
-        function update_pressure_sensors(self)
-        end
-        
-        function [x_hat,d_hat] = observe(self,x,r,u,t)
             
-            self.time = t;
+            % States
+            x_0 = core.subscribe('x_hat');
+            y_m = core.subscribe('y_m');
+            [self.x_e,self.u_e] = functions.get_equilibrium(x_0,param);
+            self.x_hat = x_0(self.x_indexes);
+            self.x_indexes = get_indexes(param.x_names,observe.x_names);
+            self.m_indexes = get_indexes(param.m_names,observe.m_names);
+            self.r_indexes = get_indexes(param.r_names,observe.r_names);
+            self.u_indexes = get_indexes(param.u_names,observe.u_names);
+            self.position = y_m(self.m_indexes);
+            self.velocity = zeros(size(self.position));
             
-            x = x(self.get_indexes(self.x_names,self.output_names));
+            % Param
+            self.L = observe.L;
             
-            % get data
-%             y_m = self.C_m*x;
-            u = self.core.subscribe('u');
+            % Settings
+            self.type = observe.type;
+            self.m_is_angle = param.m_is_angle(self.m_indexes);
             
-            u = u(self.get_indexes(self.u_names,self.use_names));
             
+            % Observer Specific
             switch self.type
-                case self.O
-                    % Runga Kuta
-                    k1 = self.observer_eqs(self.x_hat,y_m,u);
-                    k2 = self.observer_eqs(self.x_hat + self.dt/2*k1,y_m,u);
-                    k3 = self.observer_eqs(self.x_hat + self.dt/2*k2,y_m,u);
-                    k4 = self.observer_eqs(self.x_hat + self.dt*k3,y_m,u);
-                    x_hat = self.x_hat + self.dt/6 * (k1 + 2*k2 + 2*k3 + k4);
-                    
-                    k1 = self.dist_eqs(self.x_hat,y_m);
-                    k2 = self.dist_eqs(self.x_hat,y_m);
-                    k3 = self.dist_eqs(self.x_hat,y_m);
-                    k4 = self.dist_eqs(self.x_hat,y_m);
-                    d_hat = self.d_hat + self.dt/6 * (k1 + 2*k2 + 2*k3 + k4);
-                case self.dp
-                    x_hat = zeros(size(x));
-                    
-                    for k = 1:length(x_hat)/2
-                        indexes_of_velocities = ~cellfun(@isempty,regexp(self.output_names,strcat(self.output_names(k),"_{dot}")));
-                    
-                        x_hat(~indexes_of_velocities) = x(~indexes_of_velocities);
-                        
-                        % find related
-                        j = find(indexes_of_velocities);
-                        
-                        x_hat(j) = self.dirty_direvative(self.x(j),x(k),self.x(k));
-                    end
-                    d_hat = 0;
-                    self.x = x_hat;
+                case self.exact
+                case self.luenberger
                 case self.de
-                    x_hat = zeros(size(x));
-                    
-                    for k = 1:length(x_hat)/2
-                        indexes_of_velocities = ~cellfun(@isempty,regexp(self.output_names,strcat(self.output_names(k),"_{dot}")));
-                    
-                        x_hat(~indexes_of_velocities) = x(~indexes_of_velocities);
-                        
-                        % find related
-                        j = find(indexes_of_velocities);
-                        
-                        x_hat(j) = self.dirty_direvative(self.x(j),x(k),self.x(k));
-                    end
-                    d_hat = 0;
-                    self.x = x_hat;
-                case self.e
-                    x_hat = x;
-                    d_hat = 0;
-                case self.m
-                    d_hat = 0;
+                case self.dy
+            end
+        end
+        
+        % Luenberger Observer ---------------------------------------------
+        function x_hat_dot = observer_eqs(self,~,x_hat,y_m,u)
+            x_hat_dot = self.L.A*(x_hat - self.x_e) + self.L.B*(u-self.u_e + self.d_hat) + self.L.L*(y_m - self.C_m*x_hat);
+        end
+        
+        function d_hat_dot = dist_eqs(self,~,~,x_hat,y_m)
+            d_hat_dot = self.L.d*(y_m - self.L.C_m*x_hat);
+        end
+        
+        % Dirty Diriviative -----------------------------------------------
+        function velocity = dirty_direvative(self,position,beta,dt)
+            velocity = beta.*self.velocity + (1-beta)./dt.*(position-self.position);
+        end
+        
+        % Main ------------------------------------------------------------
+        function [x_hat,d_hat] = observe(self,y_m,r,u,t)
+            
+            % Unpack
+            dt = t - self.t;
+            y_m = y_m(self.m_indexes);
+            r = r(self.r_indexes);
+            u = u(self.u_indexes);
+            
+            % Obtain measurment
+            switch self.type
+                case self.exact
+                    x_hat = y_m;
+                case self.luenberger
+                    x_hat = rk4(@(time,state) self.observer_eqs(time,state,y_m,u),[0,dt],self.x_hat,true);
+                    self.d_hat = rk4(@(time,state) self.dist_eqs(time,state,self.x_hat,y_m),[0,dt],self.d_hat,true);
+                case self.de
+                    error = control.get_error(y_m,r,self.m_is_angle);
+                    beta = (2.*self.L.sigma - dt)./(2.*self.L.sigma + dt);
+                    self.velocity = dirty_direvative(self,error,beta,dt);
+                    self.position = y_m;
+                    x_hat = -self.velocity;
+                case self.dy
+                    beta = (2.*self.L.sigma - dt)./(2.*self.L.sigma + dt);
+                    self.velocity = dirty_direvative(self,y_m,beta,dt);
+                    self.position = y_m;
+                    x_hat = self.velocity;
             end
                 
+            % Math
+            self.x_hat = self.convert(x_hat);
+            
             % Save Values
-            self.x_hat = x_hat;
-            self.d_hat = d_hat;
-        end
-        
-        function x_dot = dirty_direvative(self,old_x_dot,current_x,old_x)
-            self.beta = (2.*self.sigma - self.dt)./(2.*self.sigma + self.dt);
-            x_dot = self.beta.*old_x_dot + (1-self.beta)./self.dt.*(current_x-old_x);
-        end
-        
-        function indexes = get_indexes(self,options,names)
-            indexes = false(size(options));
-            for i = 1:length(names)
-                indexes = indexes | strcmp(options,names(i));
-            end
+            self.t = t;
+            
+            % Pack
+            x_hat = self.x_hat;
+            d_hat = self.d_hat;
         end
     end
 end

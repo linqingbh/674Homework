@@ -1,195 +1,109 @@
 classdef controllers < handle
     
     properties
-        controller_type
+        % General to pass to other functions
         param
-        K
-        u
-        u_e
-        add_equilibrium
-        e
-        dt
-        index
-        beta
-        derivative_source
-        anti_windup
-        windup_limit
-        impose_sat
-        sat_lim
-        count
-        time_step
-        x_e
-        r_e
-        core
-        C_m
-        C_r
-        A
-        B
-        D
-        observer
-        x_names
-        u_names
-        r_names
-        output_names
-        use_names
-        error
-        cascade
-        intigrator_correction
-        y_m_names
-        x_indexes
+        
+        % Functions
+        get_equilibrium
+        
+        % States
+        t = 0
+        r_in_indexes
+        r_out_indexes
         u_indexes
-        y_m_indexes
-        r_indexes
-        num
-        den
-        con
-        tf
-        mags
-        phases
-        omegas
-        zeros
-        poles
-        zc
-        zf
-        F
+        
+        % Param
+        K
+        
+        % Settings
+        type
+        sat_lim
+        windup_limit
+        r_is_angle
+        
+        % Controller Specifc
+        t_vec
         plan
-        history_index
-        y_r
-        wrapping
+        prefilter
+        compensator
+        
+        % Defaults
+        count = 0;
+        error = 0;
+        cascade = [];
+        intigrator_correction = 0;
+        isangle = false
     end
-    properties (Constant)
+    properties (Constant) % Types of Controllers
         PID = 'PID';
-        SS = 'SS';
-        LS = 'LS';
-        OL = 'OL';
+        FSF = 'Full State Feedback';
+        LS = 'Loopshapping';
+        OL = 'Open Loop';
     end
     
     methods
+        % Class Initializer -----------------------------------------------
         function self = controllers(control,core)
             
             % Unapck
-            self.core = core;
             param = core.param;
             functions = core.functions;
-            settings = core.settings;
-            
-            self.controller_type = control.controller_type;
-            
-            switch self.controller_type
-                case self.OL
-                    self.plan = control.plan;
-                case self.PID
-                    self.K = control.K;
-                case self.SS
-                case self.LS
-                otherwise
-                    
-                    self.K = control.K;
-                    if isfield(control,'F')
-                        self.F = control.F;
-                    end
-                    self.anti_windup = control.anti_windup;
-                    self.windup_limit = control.windup_limit;
-                    if isfield(control,'cascade')
-                        self.cascade = control.cascade;
-                    end
-                    
-                    % States
-                    self.r_names = param.x_names(param.C_r*(1:length(self.x_names)).');
-                    self.x_e = self.get_compressed_state(self.x_names,self.use_names,param.x_e);
-                    self.r_e = self.get_compressed_state(self.x_names,self.r_names,param.x_e);
 
-                    % Param
-                    self.y_m_names = param.x_names(param.C_m*(1:length(self.x_names)).'); 
-                    self.y_m_indexes = self.get_indexes(self.y_m_names,self.use_names);
-                    self.y_r_indexes = self.get_indexes(self.r_names,self.use_names);
-                    self.A = param.A(self.x_indexes,self.x_indexes);
-                    self.B = param.B(self.x_indexes,self.u_indexes);
-                    self.C_m = param.C_m(self.y_m_indexes,self.x_indexes);
-                    self.D = param.D(self.y_r_indexes,self.u_indexes);
-
-                    % initiallize variables
-                    if strcmp(self.controller_type,self.LS)
-                        self.zc = zeros(length(self.K.A),1);
-                    end
-                    if isfield(control,'F')
-                        self.zf = zeros(length(self.F.A),1);
-                    end
-                    
-            end
-            
-            
-            
             % General to pass to other functions
-            self.core = core;
             self.param = param;
             
             % Functions
-            self.u_e = functions.u_e;
-            self.y_r = functions.y_r;
+            self.get_equilibrium = functions.get_equilibrium;
             
             % States
-            x = core.subscribe('x');
-            self.use_names = control.y_r_names;
-            self.output_names = control.u_names;
-            self.x_names = param.x_names;
-            self.u_names = param.u_names;
-            self.r_names = param.r_names;
+            self.r_in_indexes = get_indexes(param.r_names,control.r_names);
+            self.r_out_indexes = get_indexes(param.r_names,control.u_names);
+            self.u_indexes = get_indexes(param.u_names,control.u_names);
             
-            % Settigs
-            self.dt = settings.step;
-            self.sat_lim.high = control.sat_lim.high;
-            self.sat_lim.low = control.sat_lim.low;
-            self.anti_windup = control.anti_windup;
-            self.windup_limit = control.windup_limit;
+            if isempty(self.r_in_indexes)
+                throw = 1;
+            end
             
             % Param
-%             self.x_indexes = self.get_indexes(self.x_names,self.use_names);
-%             self.u_indexes = self.get_indexes(self.u_names,self.output_names);
-
-            % initiallize variables
-            self.error = 0;
-            self.intigrator_correction = 0;
-            self.count = 0;
-            self.time_step = 0;
-            self.history_index = 0;
+            self.K = control.K;
             
+            % Settigs
+            self.type = control.type;
+            self.sat_lim.high = control.sat_lim.high;
+            self.sat_lim.low = control.sat_lim.low;
+            self.windup_limit = control.windup_limit;
+            self.r_is_angle = param.r_is_angle(self.r_in_indexes);
+            
+            % Controller Specific
+            switch self.type
+                case self.OL
+                    self.t_vec = control.t_vec;
+                    self.plan = control.plan;
+                case self.PID
+                case self.FSF
+                case self.LS
+                    self.prefilter = control.prefilter;
+                    self.compensator = control.compensator;
+            end
         end
          
+        % PID -------------------------------------------------------------
         function u = execute_PID(self,u_P,u_I,u_D)
             u = -self.K.D.*u_D + self.K.P.*u_P + self.K.I.*u_I;
         end
         
-        function u = execute_SS(self,x,r,sum_of_error)
+        % Full State Feadback ---------------------------------------------
+        function u = execute_FSF(self,x,r,sum_of_error)
             u = -self.K.K*(x-self.x_e) + self.K.k_r*(r-self.r_e) - self.K.I*sum_of_error;
         end
         
+        % Loopshaping -----------------------------------------------------
         function u = execute_LS(self,zc)
             u = self.K.C*zc;
         end
         
-        function zc_dot = updatestate(self,zc,e)
-            zc_dot = self.K.A*zc+self.K.B*e;
-        end
-        
-        function zf_dot = updateprefilter(self,zf,r)
-            zf_dot = self.F.A*zf+self.F.B*r;
-        end
-        
-        function summed_error = sum_error(self)
-            summed_error = self.dt*trapz(self.error);
-        end
-        
-        function saturation_anti_windup(self,u_unsat,u_sat)
-            self.intigrator_correction = self.intigrator_correction + 1./self.K.I.*(u_unsat - u_sat);
-        end
-        
-        function derivative_anti_windup(self,velocity)
-            if abs(velocity) > self.windup_limit
-                self.intigrator_correction = self.intigrator_correction + self.dt*trapz(self.error(end-1:end));
-            end
-        end
-        
+        % General ---------------------------------------------------------
         function F = saturate(self,F)
             for i = 1:length(F)
                 if F(i) >= self.sat_lim.high
@@ -202,133 +116,97 @@ classdef controllers < handle
             end
         end
         
-        function x_out = get_compressed_state(self,options,choices,x_in)
-            x_out = zeros(size(choices));
-            for i = 1:length(choices)
-                if any(strcmp(options,choices(i)))
-                    x_out(i) = x_in(strcmp(options,choices(i)));
-                end
+        function saturation_anti_windup(self,u_unsat,u_sat)
+            if self.K.I == 0, K_I = 1;else,K_I=self.K.I;end
+            self.intigrator_correction = self.intigrator_correction + 1./K_I.*(u_unsat - u_sat);
+        end
+        
+        function derivative_anti_windup(self,velocity,dt)
+            if abs(velocity) > self.windup_limit
+                self.intigrator_correction = self.intigrator_correction + dt*trapz(self.error(end-1:end));
             end
         end
         
-        function indexes = get_indexes(self,options,names)
-            indexes = false(size(options));
-            for i = 1:length(names)
-                indexes = indexes | strcmp(options,names(i));
-            end
-        end
-        
-        function u = control(self,full_x,r,d_hat)
-            
-            % Count 
-            self.history_index = self.history_index + 1;
-            
-%             if self.history_index >= 161
-%                 throw = 1;
-%             end
-            
-%             if strcmp(self.output_names,"delta_a") && self.history_index>=159
-%                 throw = 1;
-%             end
+        % Main ------------------------------------------------------------
+        function [u,r_out] = control(self,y_r_in,y_r_dot_in,r_in,d_hat,t)
             
             % Unpack
-%             x = self.get_compressed_state(self.x_names,self.use_names,full_x);
-            [y_r_full,y_r_dot_full] = self.y_r(full_x,self.core);
-            y_r = self.get_compressed_state(self.r_names,self.use_names,y_r_full);
-            y_r_dot = self.get_compressed_state(self.r_names,self.use_names,y_r_dot_full);
-            if isempty(self.wrapping)
-                self.error = [self.error,r - y_r];
-            else
-                if self.wrapping
-                    e_y_r = [cos(y_r);sin(y_r);0];
-                    e_r = [cos(r);sin(r);0];
-                    direction = cross(e_y_r,e_r);
-                    self.error = [self.error,sign(direction(3))*atan2(sqrt(norm(e_y_r)^2*norm(e_r)^2-dot(e_y_r,e_r)^2),dot(e_y_r,e_r))];
-                else
-                    self.error = [self.error,r - y_r];
-                end
-            end
+            dt = t - self.t;
+            r = r_in(self.r_in_indexes);
+            y_r = y_r_in(self.r_in_indexes);
+            y_r_dot = y_r_dot_in(self.r_in_indexes);
+            self.error = [self.error,self.get_error(y_r,r,self.r_is_angle)];
             
             % Anti-Windup
-            if (strcmp(self.anti_windup,'derivative') || strcmp(self.anti_windup,'both'))
-                    self.derivative_anti_windup(y_r_dot);
-            end
+            self.derivative_anti_windup(y_r_dot,dt);
+            
+            sum_of_error = dt*trapz(self.error) - self.intigrator_correction;
                
             % Execute Controller
-            switch self.controller_type
+            switch self.type
                 case self.OL
-                    self.time_step = self.time_step+1;
-                    u = self.plan(:,self.time_step);
+                    u = self.plan(:,self.t_vec>=t);
                 case self.PID
                     u_P = self.error(end);
-                    u_I = self.sum_error() - self.intigrator_correction;
+                    u_I = sum_of_error;
                     u_D = y_r_dot;
                     u = self.execute_PID(u_P,u_I,u_D);
-                case self.SS
-                    sum_of_error = self.sum_error() - self.intigrator_correction;
-                    u = self.execute_SS(x,r,sum_of_error);
+                case self.FSF
+                    u = self.execute_FSF(x,r,sum_of_error);
                 case self.LS
-                    
-                    if ~isempty(self.F)
-%                         k1 = self.updateprefilter(self.zf,r_tilda);
-%                         k2 = self.updateprefilter(self.zf + self.dt/2*k1,r_tilda);
-%                         k3 = self.updateprefilter(self.zf + self.dt/2*k2,r_tilda);
-%                         k4 = self.updateprefilter(self.zf + self.dt*k3,r_tilda);
-%                         zf = self.zf + self.dt/6 * (k1 + 2*k2 + 2*k3 + k4);
-
-                        for i = 1:10
-                            self.zf = self.zf + self.dt/10*(self.updateprefilter(self.zf,(r-self.x_e(self.y_r_indexes))));
-                        end
-                        e = self.F.C*self.zf - (y_r-self.x_e(self.y_r_indexes));
-                    else
-                        e = self.error(end);
-                    end
-                    
-                    
-%                     k1 = self.updatestate(self.zc,e);
-%                     k2 = self.updatestate(self.zc + self.dt/2*k1,e);
-%                     k3 = self.updatestate(self.zc + self.dt/2*k2,e);
-%                     k4 = self.updatestate(self.zc + self.dt*k3,e);
-%                     self.zc = self.zc + self.dt/6 * (k1 + 2*k2 + 2*k3 + k4);
-                    
-                    
-                    for i = 1:10
-                        self.zc = self.zc + self.dt/10*(self.updatestate(self.zc,e));
-                    end
-                    u = self.execute_LS(self.zc);
-            end
-            
-            if strcmp(self.controller_type,self.SS)
-                x_e = self.x_e;
-            else
-                x_e = full_x;
+                    r_filtered = self.prefilter.filter_next(r,t);
+                    u = self.compensator.propigate(r_filtered,t);
             end
             
             % Add Equilibrium
-            [u_e_full,x_e_full] = self.u_e(x_e,self.param);
-            u_e = self.get_compressed_state([self.u_names;self.x_names],self.output_names,[u_e_full;x_e_full]);
-            if isempty(u_e)
-                u_e = 0;
-            end
+            [u_equilibrium,~,y_r_equilibrium] = self.get_equilibrium(y_r,self.param);
+            u_e = [u_equilibrium(self.u_indexes);y_r_equilibrium(self.r_out_indexes)];
             u_unsat = u + u_e - d_hat;
 
-            % Anti-Windup
+            % Saturation & Anti-Windup
             u_sat = self.saturate(u_unsat);
-            if ((strcmp(self.anti_windup,'saturation') || strcmp(self.anti_windup,'both'))) && self.K.I
-                self.saturation_anti_windup(u_unsat,u_sat)
-            end
+            self.saturation_anti_windup(u_unsat,u_sat)
             u = u_sat;
             
             % Cascaded controller
+            r_out = r_in;
             if ~isempty(self.cascade)
-                indexes = self.get_indexes(self.r_names,self.output_names);
-                r = self.core.subscribe_specific("r",self.history_index);
-                r(indexes) = u;
-                self.core.publish_specific("r",r,self.history_index)
-                u = self.cascade.control(full_x,u,d_hat);
+                r_out(self.r_out_indexes) = u;
+                [u,r_out] = self.cascade.control(y_r_in,y_r_dot_in,r_out,d_hat,t);
+            end
+        end
+    end
+    
+    % Static Functions ----------------------------------------------------
+    methods (Static)
+        function e = get_error(actual,commanded,is_angle)
+            if isempty(is_angle),is_angle=false(length(commanded(:,1)));end
+            
+            e = zeros(size(actual));
+            for i = 1:length(is_angle)
+                for j = 1:length(actual(1,:))
+                    if length(commanded(1,:))==1,k=1;else,k=j;end
+                    if is_angle
+                        e_y_r = [cos(actual(i,j));sin(actual(i,j));0];
+                        e_r = [cos(commanded(i,k));sin(commanded(i,k));0];
+                        direction = cross(e_y_r,e_r);
+                        e(i,j) = sign(direction(3))*atan2(sqrt(norm(e_y_r)^2*norm(e_r)^2-dot(e_y_r,e_r)^2),dot(e_y_r,e_r));
+                    else
+                        e(i,j) = commanded(i,k) - actual(i,j);
+                    end
+                end
             end
         end
         
+        % Gains Calculators -----------------------------------------------
+        function K = get_PID_gains()
+        end
+        
+        function K = get_FSF_gains()
+        end
+        
+        function K = get_LS_gains()
+        end
     end
 end
 

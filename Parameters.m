@@ -43,12 +43,16 @@ param.take_off_pitch = 15*pi/180;
 
 % State Description
 param.x_names = ["p_{n}";"p_{e}";"p_{d}";"u";"v";"w";"\phi";"\theta";"\psi";"p";"q";"r"];
+param.sensor_names = ["GPS_n";"GPS_e";"GPS_h";"GPS_Vg";"GPS_chi";"Bar";"Pito";"Comp";"Accel_x";"Accel_y";"Accel_z";"RateGyro_p";"RateGyro_q";"RateGyro_r";"u";"v";"w"];
+param.m_names = ["p_{n}";"p_{e}";"p_{d}";"u_a";"\phi";"\theta";"\psi";"p";"q";"r";"\chi";"V_gh";"u_w";"v_w";"w_w"];
+param.r_names = ["\chi";"\phi";"p_{d}";"\theta";"\beta";"V_a"];
 param.u_names = ["delta_a";"delta_e";"delta_r";"delta_t"];
-param.r_names = ["\chi","\phi","h","\theta","\beta","V_a"];
 
-param.x_e = [0;0;0;0;0;0;0;0;0;0;0;0];
+param.x_is_angle = [false;false;false;false;false;false;true;true;true;false;false;false];
+param.m_is_angle = [false;false;false;false;true;true;true;false;false;false;false;false;false;false;false;false];
+param.r_is_angle = [true;true;false;true;true;false];
 
-% State Space Equations
+param.h_weight = 0.9;
 
 %% Uncertainty
 % Here you are seting the standard deviation of the uncertianty
@@ -57,9 +61,9 @@ param.x_e = [0;0;0;0;0;0;0;0;0;0;0;0];
 % The falues for bias are one standard deviations offset.
 % k,m,b
 
-param.uncertian_param = {'mass'};
-param.D_in_param.random  = 0.2.*[param.mass];
-param.D_in_param.bias    = 0.0.*[param.mass];
+param.uncertian_param = {};
+param.D_in_param.random  = 0.2.*[];
+param.D_in_param.bias    = 0.0.*[];
 % F
 param.uncertian_u = false;
 param.D_in_u.random      = 0.0;
@@ -74,8 +78,12 @@ param.N.random           = [0.001,0.001,0,0];
 param.N.bias             = [0,0,0,0];
 
 % Wind
-param.W_s = [0;1;-1];
-param.gust_condition = 'moderate';
+base = [0;1;1]; % NEU
+gust = wind.steady;
+param.wind = wind(gust,base,param.V_design);
+
+% Magnetic
+param.declination = 3.97*pi/180;
 
 %% Simulation Dimensions
 
@@ -110,42 +118,40 @@ settings.publish     = 0.2;    % s
 settings.window      = [-1000,1000,-1000,1000,0,200]; % m
 settings.view        = [45,45];
 settings.gph_per_img = 6;
-settings.labels      = ["p_{e} - Latitude (m)","p_{n} - Longitude (m)","-p_{d} - Altitude (m)"];
+settings.labels      = ["p_{e} - Latitude (m)","p_{n} - Longitude (m)","h - Altitude (m)"];
 
 %% Functions
 
 functions.get_drawing = @get_drawing;
-functions.u_e = @u_e;
+functions.get_equilibrium = @get_equilibrium;
 functions.eqs_motion = @eqs_motion;
 functions.controller_architecture = @controller_architecture; 
-functions.y_r = @y_r;
+functions.get_y_r = @get_y_r;
+functions.get_y_m = @get_y_m;
+functions.get_tf_coefficents = @get_tf_coefficents;
 
 % Controller
-function u = controller_architecture(controllers,x,r,d_hat,param)
+function [u,r] = controller_architecture(controllers,y_r,y_r_dot,r,d_hat,t,param)
     % Lateral
     % Saturate
-    current = y_r(x,param);
-    chi = current(1);
 %     r(1) = min(param.chi_sat_lim.high+chi,r(1));
 %     r(1) = max(param.chi_sat_lim.low+chi,r(1));
-    
-    
-    
-    u(1,1) = controllers(1).control(x,r(1),d_hat);
-    u(3,1) = controllers(2).control(x,r(5),d_hat);
+    [u(1,1),r] = controllers(1).control(y_r,y_r_dot,r,d_hat,t);
+    [u(3,1),r] = controllers(2).control(y_r,y_r_dot,r,d_hat,t);
     
     % Longitudinal
-    if -x(3) < param.take_off_alt
-        u(2,1) = controllers(3).cascade.control(x,param.take_off_pitch,d_hat);
+    if -y_r(3) < param.take_off_alt
+        r(4) = param.take_off_pitch;
+        u(2,1) = controllers(3).cascade.control(y_r,y_r_dot,r,d_hat,t);
         u(4,1) = 1;
     else
         % Saturate
-        r(3) = min(param.h_sat_lim.high-x(3),r(3));
-        r(3) = max(param.h_sat_lim.low-x(3),r(3));
+        r(3) = min(param.h_sat_lim.high-y_r(3),r(3));
+        r(3) = max(param.h_sat_lim.low-y_r(3),r(3));
         
         % Controller
-        u(2,1) = controllers(3).control(x,r(3),d_hat);
-        u(4,1) = controllers(4).control(x,r(6),d_hat);
+        [u(2,1),r] = controllers(3).control(y_r,y_r_dot,r,d_hat,t);
+        [u(4,1),r] = controllers(4).control(y_r,y_r_dot,r,d_hat,t);
     end
     
     %u(1,1) = param.u_0(1);
@@ -155,50 +161,48 @@ function u = controller_architecture(controllers,x,r,d_hat,param)
 end
 
 % Dynamic Equilibrium Input
-function [u,x] = u_e(x,param)
+function [u,x,y_r] = get_equilibrium(~,param,functions)
     if isfield(param,'u_0')
         u = param.u_0;
         x = param.x_0;
+        y_r = param.y_r_0;
     else
         % Unpack
         V_a = param.trim.V_a;
         R = param.trim.R;
         gamma = param.trim.gamma;
+        desired = get_x_dot_star(V_a,R,gamma);
         
         % Initial conditions
-        alpha = 0;
-        beta = 0;
-        phi = 0;
+        initial = [0;0;0];
+        
+        % Wind
+        param.wind = wind(wind.steady,[0;0;0],param.trim.V_a);
+        
+        
+        % function to trim
+        fun = @(input) norm(functions.eqs_motion(0,get_x_star(input,V_a,R,gamma),get_u_star(input,V_a,R,gamma,param),param)-desired)^2;
         
         switch param.optimizer.name
             case "fminsearch"
-                output = fminsearch(@(variables) J(variables,V_a,R,gamma,param),[alpha,beta,phi]);
-                alpha = output(1);
-                beta = output(2);
-                phi = output(3);
+                output = fminsearch(fun,initial);
             case "gradiant"
-                [alpha,beta,phi] = min_J(alpha,beta,phi,V_a,R,gamma,param); 
+                output = gd_optimizer(fun,initial);
             otherwise
                 error("Unrecognized optimizer")
         end
 
-        x = x_star(alpha,beta,phi,V_a,R,gamma);
+        x = get_x_star(output,V_a,R,gamma);
+        x(3) = -param.trim.h_0;
 
-        u = u_star(alpha,beta,V_a,x,param);
+        u = get_u_star(output,V_a,R,gamma,param);
+        
+        y_r = [0;0;param.trim.h_0;x(8);0;V_a];
     end
 end
 
 % Equations of Motion
-function x_dot = eqs_motion(dt,x,input,core)
-    
-    param = core.param;
-    
-    persistent x_k_u x_k_v x_k_w
-    if isempty(x_k_u)
-        x_k_u = 0;
-        x_k_v = [0;0];
-        x_k_w = [0;0];
-    end
+function x_dot = eqs_motion(t,x,input,param)
 
     %------------------------------------------------
     % Aerodynamics
@@ -215,6 +219,11 @@ function x_dot = eqs_motion(dt,x,input,core)
     p       = x(10);
     q       = x(11);
     r       = x(12);
+    % Input
+    delta_a = input(1);
+    delta_e = input(2);
+    delta_r = input(3);
+    delta_t = input(4);
     % Trig
     S_phi = sin(phi);
     C_phi = cos(phi);
@@ -223,174 +232,24 @@ function x_dot = eqs_motion(dt,x,input,core)
     S_psi = sin(psi);
     C_psi = cos(psi);
     % Rotations
-    R_bv2 = [1,0,0;
-             0,C_phi,-S_phi;
-             0,S_phi,C_phi];
-    R_v2v1 = [C_theta,0,S_theta;
-              0,1,0;
-              -S_theta,0,C_theta];
-    R_v1v = [C_psi,-S_psi,0;
-             S_psi,C_psi,0;
-             0,0,1];
-    R_bv = R_v1v*R_v2v1*R_bv2;
-    R_vb = R_bv.';
+    R_vb = get_rotation(phi,theta,psi,'v->b');
     % Air
-    % Static wind
-    W_s = param.W_s;
-    
-    % Gusts wigd
-    if -p_d <= 50
-        switch param.gust_condition
-            case "light"
-                sigma_u = 1.06;
-                sigma_v = sigma_u;
-                sigma_w = 0.7;
-                L_u = 200;
-                L_v = L_u;
-                L_w = 50;
-                white_noise = randn;
-            case "moderate"
-                sigma_u = 2.12;
-                sigma_v = sigma_u;
-                sigma_w = 1.4;
-                L_u = 200;
-                L_v = L_u;
-                L_w = 50;
-                white_noise = randn;
-            otherwise % Steady
-                sigma_u = 0;
-                sigma_v = sigma_u;
-                sigma_w = 0;
-                L_u = 1;
-                L_v = L_u;
-                L_w = 1;
-                white_noise = 0;
-        end
-    else
-        switch param.gust_condition
-            case "light"
-                sigma_u = 1.5;
-                sigma_v = sigma_u;
-                sigma_w = 1.5;
-                L_u = 533;
-                L_v = L_u;
-                L_w = 533;
-                white_noise = randn;
-            case "moderate"
-                sigma_u = 3.0;
-                sigma_v = sigma_u;
-                sigma_w = 3.0;
-                L_u = 533;
-                L_v = L_u;
-                L_w = 533;
-                white_noise = randn;
-            otherwise % Steady
-                sigma_u = 0;
-                sigma_v = sigma_u;
-                sigma_w = 0;
-                L_u = 1;
-                L_v = L_u;
-                L_w = 1;
-                white_noise = 0;
-        end
-    end
-    
-    function [y,x_k2] = get_next_wind(num,den,x_k,white_noise,dt)
-
-       I = eye(length(x_k));
-
-       [A,B,C,D] = tf2ss(num,den);
-       
-       x_k2 = (I+dt*A)*x_k + dt*B*white_noise;
-       y = C*x_k + D*white_noise;
-    end
-    V_design    = param.V_design;
-    [u_w_g,x_k_u] = get_next_wind(sigma_u*sqrt(2*V_design/L_u),[1,V_design/L_u],x_k_u,white_noise,dt);
-    [v_w_g,x_k_v] = get_next_wind(sigma_v*sqrt(3*V_design/L_v)*[1,V_design/(sqrt(3)*L_v)],conv([1,V_design/L_v],[1,V_design/L_v]),x_k_v,white_noise,dt);
-    [w_w_g,x_k_w] = get_next_wind(sigma_w*sqrt(3*V_design/L_w)*[1,V_design/(sqrt(3)*L_w)],conv([1,V_design/L_w],[1,V_design/L_w]),x_k_w,white_noise,dt);
-
-    W_g = [u_w_g;v_w_g;w_w_g];
-    
+    [W_s,W_g] = param.wind.get(t);
     V_w_b = R_vb*W_s+W_g; % Wind in the inertial NED frame 
-    
     air  = atmosphere(-p_d);
     rho = air.rho;
-    
-    % Input
-    delta_a = input(1);
-    delta_e = input(2);
-    delta_r = input(3);
-    delta_t = input(4);
     % Aircraft parameters
-    g    = param.g; % Rigid Body
-    mass = param.mass;
-    Jx   = param.Jx;
-    Jy   = param.Jy;
-    Jz   = param.Jz;
-    Jxz  = param.Jxz;
-    M    = param.M;% Dimensions
-    c    = param.c;
-    b    = param.b;
-    S_wing    = param.S_wing;
-    AR   = b^2/S_wing;
-    alpha_0     = param.alpha_0; % Aerodynamics
-    C_L_0       = param.C_L_0;
-    C_L_alpha   = param.C_L_alpha;
-    C_L_q       = param.C_L_q;
-    C_L_delta_e = param.C_L_delta_e;
-    C_D_p       = param.C_D_p;
-    C_D_q       = param.C_D_q;
-    C_D_delta_e = param.C_D_delta_e;
-    C_Y_0       = param.C_Y_0;
-    C_Y_beta    = param.C_Y_beta;
-    C_Y_p       = param.C_Y_p;
-    C_Y_r       = param.C_Y_r;
-    C_Y_delta_a = param.C_Y_delta_a;
-    C_Y_delta_r = param.C_Y_delta_r;
-    e           = param.e;
-    C_l_0       = param.C_l_0; % Stability
-    C_l_beta    = param.C_l_beta;
-    C_l_p       = param.C_l_p;
-    C_l_r       = param.C_l_r;
-    C_l_delta_a = param.C_l_delta_a;
-    C_l_delta_r = param.C_l_delta_r;
-    C_m_0       = param.C_m_0;
-    C_m_alpha   = param.C_m_alpha;
-    C_m_q       = param.C_m_q;
-    C_m_delta_e = param.C_m_delta_e;
-    C_n_0       = param.C_n_0;
-    C_n_beta    = param.C_n_beta;
-    C_n_p       = param.C_n_p;
-    C_n_r       = param.C_n_r;
-    C_n_delta_a = param.C_n_delta_a;
-    C_n_delta_r = param.C_n_delta_r;
-    S_prop      = param.S_prop; % Motor
-    C_prop      = param.C_prop;
-    k_motor     = param.k_motor;
-    k_T_P       = param.k_T_P;
-    k_Omega     = param.k_Omega;
-    % Shorthand
-    Gamma(1) = Jxz*(Jx-Jy+Jz)/(Jx*Jz-Jxz^2);
-    Gamma(2) = (Jz*(Jz-Jy)+Jxz^2)/(Jx*Jz-Jxz^2);
-    Gamma(3) = Jz/(Jx*Jz-Jxz^2);
-    Gamma(4) = Jxz/(Jx*Jz-Jxz^2);
-    Gamma(5) = (Jz-Jx)/Jy;
-    Gamma(6) = Jxz/Jy;
-    Gamma(7) = ((Jx-Jy)*Jx+Jxz^2)/(Jx*Jz-Jxz^2);
-    Gamma(8) = Jx/(Jx*Jz-Jxz^2);
+    my_unpack(param)
     
     % Wind Triangle
     V_g_b = [u;v;w];
     V_a_b = V_g_b - V_w_b;
-    u_r = V_a_b(1);
-    v_r = V_a_b(2);
-    w_r = V_a_b(3);
-    alpha = atan2(w_r,u_r);
-    V_a = sqrt(u_r^2+v_r^2+w_r^2);
-    beta = atan2(v_r,sqrt(u_r^2+w_r^2));
-    if ismethod(core,"publish")
-        core.publish("V_a",V_a_b)
-    end
+    u_a = V_a_b(1);
+    v_a = V_a_b(2);
+    w_a = V_a_b(3);
+    alpha = atan2(w_a,u_a);
+    V_a = sqrt(u_a^2+v_a^2+w_a^2);
+    beta = atan2(v_a,sqrt(u_a^2+w_a^2));
 
     % Drag and Lift Coeficents
     sigma = (1+exp(-M*(alpha-alpha_0))+exp(M*(alpha+alpha_0)))/((1+exp(-M*(alpha-alpha_0)))*(1+exp(M*(alpha+alpha_0))));
@@ -472,20 +331,10 @@ function x_dot = eqs_motion(dt,x,input,core)
     x_dot(4:6)   = Acceleration+1/mass*[fx;fy;fz];
     x_dot(7:9)   = Angular_Velocity*x(10:12);
     x_dot(10:12) = sum(Angular_Acceleration,2);
-    
-%     if x_dot(10)<-2
-%         throw = 1;
-%     end
-
-    
-    if ismethod(core,"publish")
-        core.publish("V_a_dot",x_dot(4:6))
-    end
-
 end
 
 % Anamation Information
-function [points,colors,history] = get_drawing(x,settings,param)
+function [points,colors,history] = get_drawing(x,~,param)
     persistent previous_positions
     
     if isempty('previous_positions')
@@ -493,15 +342,6 @@ function [points,colors,history] = get_drawing(x,settings,param)
     end
     
     previous_positions = [previous_positions,x(1:3)];
-    
-    c_phi = cos(x(7));
-    s_phi = sin(x(7));
-    c_theta = cos(x(8));
-    s_theta = sin(x(8));
-    c_psi = cos(x(9));
-    s_psi = sin(x(9));
-
-    settings.step;
     
     % Wing
     wing_w = param.wing_w;
@@ -566,20 +406,9 @@ function [points,colors,history] = get_drawing(x,settings,param)
     points = {wing.right,wing.left,fusalage.nose.top,fusalage.nose.left,fusalage.nose.right,fusalage.nose.bottom,fusalage.empanage.top,fusalage.empanage.left,fusalage.empanage.right,fusalage.empanage.bottom,horz_stab,vir_stab};
     colors = {'g','r','y','k','k','k','k','k','k','k','k','k'};
     
-    % Rotation matricies
-    R_bv2 = [1,0,0;
-             0,c_phi,-s_phi;
-             0,s_phi,c_phi];
-    R_v2v1 = [c_theta,0,s_theta;
-              0,1,0;
-              -s_theta,0,c_theta];
-    R_v1v = [c_psi,-s_psi,0;
-             s_psi,c_psi,0;
-             0,0,1];
-    R_bv = R_v1v*R_v2v1*R_bv2;
-    R_NED_ENU = [0,1,0;
-                 1,0,0;
-                 0,0,-1];
+
+    R_bv = get_rotation(x(7),x(8),x(9),'b->v');
+    R_NED_ENU = get_rotation(x(7),x(8),x(9),'NED->ENU');
     
     for i = 1:length(points)
         points{i} = points{i}.';
@@ -593,83 +422,122 @@ function [points,colors,history] = get_drawing(x,settings,param)
     history{1} = R_NED_ENU*previous_positions;
 end
 
-% Get position
-function [y_r_out,y_r_dot_out] = y_r(x,core)
+% y_r Conversion
+function [y_r_out,y_r_dot_out] = get_y_r(y_m,x_hat)
 
-    h = -x(3);
+    chi = y_m(11);
+    V_w_b = y_m(13:15);
+    V_a_b_dot = 0; % assume unaccelorated flight. Needs updating!!!!
 
-    phi = x(7);
-    theta = x(8);
-    psi = x(9);
+    p_d = x_hat(3);
+    u = x_hat(4);
+    v = x_hat(5);
+    w = x_hat(6);
+    phi = x_hat(7);
+    theta = x_hat(8);
+    psi = x_hat(9);
+    p = x_hat(10);
+    q = x_hat(11);
+    r = x_hat(12);
+
+    R_bv = get_rotation(phi,theta,psi,'b->v');
+    V_g_g = R_bv*[u;v;w];
+    p_d_dot = V_g_g(3);
     
-    p = x(10);
-    q = x(11);
-    r = x(12);
-
-    c_phi = cos(phi);
-    s_phi = sin(phi);
-    c_theta = cos(theta);
-    s_theta = sin(theta);
-    c_psi = cos(psi);
-    s_psi = sin(psi);
-
-    R_bv2 = [1,0,0;
-             0,c_phi,-s_phi;
-             0,s_phi,c_phi];
-    R_v2v1 = [c_theta,0,s_theta;
-              0,1,0;
-              -s_theta,0,c_theta];
-    R_v1v = [c_psi,-s_psi,0;
-             s_psi,c_psi,0;
-             0,0,1];
-    R_bv = R_v1v*R_v2v1*R_bv2;
-    
-    V_g_b = x(4:6);
-    V_g_g = R_bv*V_g_b;
-    h_dot = -V_g_g(3);
-    
-    try
-        V_a_b = core.subscribe("V_a");
-        V_a_b_dot = core.subscribe("V_a_dot");
-    catch
-        V_a_b = x(4:6);
-        V_a_b_dot = [0;0;0];
-    end
+    V_g_b = [u;v;w];
+    V_a_b = V_g_b - V_w_b;
     u_a = V_a_b(1);
     v_a = V_a_b(2);
     w_a = V_a_b(3);
-    u_a_dot = V_a_b_dot(1);
-    v_a_dot = V_a_b_dot(2);
-    w_a_dot = V_a_b_dot(3);
+    u_a_dot = 0; % Assume unaccelorated flight: this only affects beta_dot. Needs updating!!!!! 
+    v_a_dot = 0;
+    w_a_dot = 0;
     V_a = sqrt(sum(V_a_b.^2));
     V_a_dot = sqrt(sum(V_a_b_dot.^2));
     beta = atan2(v_a,sqrt(u_a^2+w_a^2));
-    beta_dot = 1/(v_a^2/(u_a^2+w_a^2)+1)*(v_a_dot/sqrt(u_a^2+w_a^2)-v_a*(u_a*u_a_dot+w_a*w_a_dot)/(u_a^2+w_a^2)^(3/2));
-    chi = atan2(V_g_g(2),V_g_g(1));
+    beta_dot = 0;%1/(v_a^2/(u_a^2+w_a^2)+1)*(v_a_dot/sqrt(u_a^2+w_a^2)-v_a*(u_a*u_a_dot+w_a*w_a_dot)/(u_a^2+w_a^2)^(3/2));
     
-    rotational_velocity = [1,s_phi*tan(theta),c_phi*tan(theta);
-                           0,c_phi,-s_phi;
-                           0,s_phi/c_theta,c_phi/c_theta]*[p;q;r];
+    rotational_velocity = [1,sin(phi)*tan(theta),cos(phi)*tan(theta);
+                           0,cos(phi),-sin(phi);
+                           0,sin(phi)/cos(theta),cos(phi)/cos(theta)]*[p;q;r];
     phi_dot = rotational_velocity(1);
     theta_dot = rotational_velocity(2);
     chi_dot = rotational_velocity(3);
     
     y_r_out(1,1) = chi;
     y_r_out(2,1) = phi;
-    y_r_out(3,1) = h;
+    y_r_out(3,1) = p_d;
     y_r_out(4,1) = theta;
     y_r_out(5,1) = beta;
     y_r_out(6,1) = V_a;
     
     y_r_dot_out(1,1) = chi_dot;
     y_r_dot_out(2,1) = phi_dot;
-    y_r_dot_out(3,1) = h_dot;
+    y_r_dot_out(3,1) = p_d_dot;
     y_r_dot_out(4,1) = theta_dot;
     y_r_dot_out(5,1) = beta_dot;
     y_r_dot_out(6,1) = V_a_dot;
 end
 
-function output = x_star(alpha,beta,phi,V_a,R,gamma)
+% y_m Conversion
+function y_m = get_y_m(sensor_data,param)
+    p_n=sensor_data(1);
+    p_e=sensor_data(2);
+    h_gps=sensor_data(3);
+    V_gh=sensor_data(4);
+    chi=sensor_data(5);
+    P_static=sensor_data(6);
+    P_dynamic=sensor_data(7);
+    psi=sensor_data(8);
+    a_x=sensor_data(9);
+    a_y=sensor_data(10);
+    a_z=sensor_data(11);
+    p=sensor_data(12);
+    q=sensor_data(13);
+    r=sensor_data(14);
+    u = sensor_data(15);
+    v = sensor_data(16);
+    w = sensor_data(17);
+    
+    g = param.g;
+    
+    air = atmosphere(0);
+    
+    h_Bar = P_static/(g*air.rho);
+    p_d = -(param.h_weight*h_Bar+(1-param.h_weight)*h_gps);
+    
+    u_a = sqrt(2/air.rho*P_dynamic);
+    
+%     phi = atan2(a_y,a_z);
+%     theta = atan2(a_x,sqrt(g^2-a_x^2));
+%     psi = psi - param.declination;
+
+    phi = a_x;
+    theta = a_y;
+    psi = a_z;
+
+    y_m(1,1) = p_n;
+    y_m(2,1) = p_e;
+    y_m(3,1) = p_d;
+    y_m(4,1) = u_a;
+    y_m(5,1) = phi;
+    y_m(6,1) = theta;
+    y_m(7,1) = psi;
+    y_m(8,1) = p;
+    y_m(9,1) = q;
+    y_m(10,1) = r;
+    y_m(11,1) = chi;
+    y_m(12,1) = V_gh;
+    y_m(13,1) = u; % Needs Updating!!!!!!!!!!!!!!!!!!!!!!!
+    y_m(14,1) = v;
+    y_m(15,1) = w;
+end
+
+% Other Functions
+function output = get_x_star(input,V_a,R,gamma)
+    alpha = input(1);
+    beta = input(2);
+    phi = input(3);
     output = [0;
               0;
               0;
@@ -684,131 +552,62 @@ function output = x_star(alpha,beta,phi,V_a,R,gamma)
               V_a/R*cos(phi)*cos(alpha + gamma)];
 end
 
-function output = x_dot_star(V_a,R,gamma)
+function output = get_x_dot_star(V_a,R,gamma)
     output = [V_a*cos(gamma);0;-V_a*sin(gamma);0;0;0;0;0;V_a/R;0;0;0];
 end
 
-function output = u_star(alpha,beta,V_a,x,param)
-    air  = atmosphere(0);
-    rho = air.rho;
-
+function output = get_u_star(input,V_a,R,gamma,param)
+    
+    % Unpack
+    x = get_x_star(input,V_a,R,gamma);
     v       = x(5);
     w       = x(6);
     theta   = x(8);
     p       = x(10);
     q       = x(11);
     r       = x(12);
-    g    = param.g; % Rigid Body
-    mass = param.mass;
-    Jx   = param.Jx;
-    Jy   = param.Jy;
-    Jz   = param.Jz;
-    Jxz  = param.Jxz;
-    M    = param.M;% Dimensions
-    c    = param.c;
-    b    = param.b;
-    S_wing    = param.S_wing;
-    AR   = b^2/S_wing;
-    alpha_0     = param.alpha_0; % Aerodynamics
-    C_L_0       = param.C_L_0;
-    C_L_alpha   = param.C_L_alpha;
-    C_L_q       = param.C_L_q;
-    C_L_delta_e = param.C_L_delta_e;
-    C_D_p       = param.C_D_p;
-    C_D_q       = param.C_D_q;
-    C_D_delta_e = param.C_D_delta_e;
-    e           = param.e;
-    C_l_0       = param.C_l_0; % Stability
-    C_l_beta    = param.C_l_beta;
-    C_l_p       = param.C_l_p;
-    C_l_r       = param.C_l_r;
-    C_l_delta_a = param.C_l_delta_a;
-    C_l_delta_r = param.C_l_delta_r;
-    C_m_0       = param.C_m_0;
-    C_m_alpha   = param.C_m_alpha;
-    C_m_q       = param.C_m_q;
-    C_m_delta_e = param.C_m_delta_e;
-    C_n_0       = param.C_n_0;
-    C_n_beta    = param.C_n_beta;
-    C_n_p       = param.C_n_p;
-    C_n_r       = param.C_n_r;
-    C_n_delta_a = param.C_n_delta_a;
-    C_n_delta_r = param.C_n_delta_r;
-    S_prop      = param.S_prop; % Motor
-    C_prop      = param.C_prop;
-    k_motor     = param.k_motor;
-    % Shorthand
-    Gamma(1) = Jxz*(Jx-Jy+Jz)/(Jx*Jz-Jxz^2);
-    Gamma(2) = (Jz*(Jz-Jy)+Jxz^2)/(Jx*Jz-Jxz^2);
-    Gamma(3) = Jz/(Jx*Jz-Jxz^2);
-    Gamma(4) = Jxz/(Jx*Jz-Jxz^2);
-    Gamma(5) = (Jz-Jx)/Jy;
-    Gamma(6) = Jxz/Jy;
-    Gamma(7) = ((Jx-Jy)*Jx+Jxz^2)/(Jx*Jz-Jxz^2);
-    Gamma(8) = Jx/(Jx*Jz-Jxz^2);
+    air  = atmosphere(0);
+    rho = air.rho;
+    my_unpack(param)
+    alpha = input(1);
+    beta = input(2);
     
-    C_p_0 = gamma(3)*C_l_0 + gamma(4)*C_n_0;
-    C_p_beta = gamma(3)*C_l_beta + gamma(4)*C_n_beta;
-    C_p_p = gamma(3)*C_l_p + gamma(4)*C_n_p;
-    C_p_r = gamma(3)*C_l_r + gamma(4)*C_n_r;
-    C_p_delta_a = gamma(3)*C_l_delta_a + gamma(4)*C_n_delta_a;
-    C_p_delta_r = gamma(3)*C_l_delta_r + gamma(4)*C_n_delta_r;
-    C_r_0 = gamma(4)*C_l_0 + gamma(8)*C_n_0;
-    C_r_beta = gamma(4)*C_l_beta + gamma(8)*C_n_beta;
-    C_r_p = gamma(4)*C_l_p + gamma(8)*C_n_p;
-    C_r_r = gamma(4)*C_l_r + gamma(8)*C_n_r;
-    C_r_delta_a = gamma(4)*C_l_delta_a + gamma(8)*C_n_delta_a;
-    C_r_delta_r = gamma(4)*C_l_delta_r + gamma(8)*C_n_delta_r;
-    
-    
+    % Lift and Drag
     sigma = (1+exp(-M*(alpha-alpha_0))+exp(M*(alpha+alpha_0)))/((1+exp(-M*(alpha-alpha_0)))*(1+exp(M*(alpha+alpha_0))));
     C_D = C_D_p+(C_L_0 + C_L_alpha*alpha)^2/(pi*e*AR);
     C_L = (1-sigma)*(C_L_0+C_L_alpha*alpha)+2*sigma*sign(alpha)*sin(alpha)^2*cos(alpha);
     
+    % Lift and Drag to Force
     C_X = -C_D*cos(alpha)+C_L*sin(alpha);
     C_X_q = -C_D_q*cos(alpha)+C_L_q*sin(alpha);
     C_X_delta_e = -C_D_delta_e*cos(alpha)+C_L_delta_e*sin(alpha);
 
+    % Control Inputs nessisary to Cause these Forces
     delta_e = ((Jxz*(p^2-r^2)+(Jx-Jz)*p*r)/(1/2*rho*V_a^2*c*S_wing) - C_m_0 - C_m_alpha*alpha - C_m_q*c*q/(2*V_a))/C_m_delta_e;
     delta_t = sqrt((2*mass*(-r*v+q*w+g*sin(theta)) - rho*V_a^2*S_wing*(C_X+C_X_q*c*q/(2*V_a)+C_X_delta_e*delta_e))/(rho*S_prop*C_prop*k_motor^2)+(V_a/k_motor)^2);
     delta_long = [C_p_delta_a,C_p_delta_r;C_r_delta_a,C_r_delta_r]^-1*[(-Gamma(1)*p*q+Gamma(2)*q*r)/(1/2*rho*V_a^2*S_wing*b)-C_p_0-C_p_beta*beta-C_p_p*b*p/(2*V_a)-C_p_r*b*r/(2*V_a);
                                                                        (-Gamma(7)*p*q+Gamma(1)*q*r)/(1/2*rho*V_a^2*S_wing*b)-C_r_0-C_r_beta*beta-C_r_p*b*p/(2*V_a)-C_r_r*b*r/(2*V_a)];
-    
+    % Pack
     output = [delta_long(1);delta_e;delta_long(2);delta_t];
 end
 
-function output = J(input,V_a,R,gamma,param)
-    
-    alpha = input(1);
-    beta = input(2);
-    phi = input(3);
-
-    param.wind = [0;0;0];
-    param.gust_condition = 'steady';
-    
-    x = x_star(alpha,beta,phi,V_a,R,gamma);
-    u = u_star(alpha,beta,V_a,x,param);
-    x_dot = x_dot_star(V_a,R,gamma);
-    
-    core.param = param;
-    
-    f = eqs_motion(1000,x,u,core);
-    output = norm(x_dot(3:end)-f(3:end))^2;
+function [a_phi_1,a_phi_2,a_beta_1,a_beta_2,a_theta_1,a_theta_2,a_theta_3,a_V_1,a_V_2,a_V_3] = get_tf_coefficents(param)
+    my_unpack(param)
+    delta_e = u_0(2);
+    delta_t = u_0(4);
+    alpha = atan2(x_0(6),x_0(4));
+    V_a = trim.V_a;
+    a_phi_1     = 1/4*rho*V_a*S_wing*b^2*C_p_p;
+    a_phi_2     = 1/2*rho*V_a^2*S_wing*b*C_p_delta_a;
+    a_beta_1    = -rho*V_a*S_wing/(2*mass)*C_Y_beta; 
+    a_beta_2    = rho*V_a*S_wing/(2*mass)*C_Y_delta_r;
+    a_theta_1   = -rho*V_a*c^2*S_wing/(4*Jy)*C_m_q;
+    a_theta_2   = -rho*V_a^2*c*S_wing/(2*Jy)*C_m_alpha;
+    a_theta_3   = rho*V_a^2*c*S_wing/(2*Jy)*C_m_delta_e;
+    a_V_1       = rho*V_a*S_wing/mass*(C_D_0+C_D_alpha*alpha+C_D_delta_e*delta_e) + rho*S_prop/mass*C_prop*V_a;
+    a_V_2       = rho*S_prop/mass*C_prop*k_motor^2*delta_t;
+    a_V_3       = g;
 end
 
-function [alpha,beta,phi] = min_J(alpha,beta,phi,V_a,R,gamma,param)
-    epsilon = param.optimizer.epsilon;
-    N = param.optimizer.N;
-    kappa = param.optimizer.kappa;
-    for k = 1:N
-        alpha_plus = alpha + epsilon;
-        beta_plus = beta + epsilon;
-        phi_plus = phi + epsilon;
-        dJ_dalpha = (J([alpha_plus,beta,phi],V_a,R,gamma,param)-J([alpha,beta,phi],V_a,R,gamma,param))/epsilon;
-        dJ_dbeta = (J([alpha,beta_plus,phi],V_a,R,gamma,param)-J([alpha,beta,phi],V_a,R,gamma,param))/epsilon;
-        dJ_dphi = (J([alpha,beta,phi_plus],V_a,R,gamma,param)-J([alpha,beta,phi],V_a,R,gamma,param))/epsilon;
-        alpha = alpha - kappa*dJ_dalpha;
-        beta = beta - kappa*dJ_dbeta;
-        phi = phi - kappa*dJ_dphi;
-    end
-end
+
+

@@ -161,6 +161,30 @@ function param = aircraft(name,param)
             P.alpha_0        = 0.4712;
     end
     
+    P.Gamma(1) = P.Jxz*(P.Jx-P.Jy+P.Jz)/(P.Jx*P.Jz-P.Jxz^2);
+    P.Gamma(2) = (P.Jz*(P.Jz-P.Jy)+P.Jxz^2)/(P.Jx*P.Jz-P.Jxz^2);
+    P.Gamma(3) = P.Jz/(P.Jx*P.Jz-P.Jxz^2);
+    P.Gamma(4) = P.Jxz/(P.Jx*P.Jz-P.Jxz^2);
+    P.Gamma(5) = (P.Jz-P.Jx)/P.Jy;
+    P.Gamma(6) = P.Jxz/P.Jy;
+    P.Gamma(7) = ((P.Jx-P.Jy)*P.Jx+P.Jxz^2)/(P.Jx*P.Jz-P.Jxz^2);
+    P.Gamma(8) = P.Jx/(P.Jx*P.Jz-P.Jxz^2);
+    
+    P.AR = P.b^2/P.S_wing;
+    
+    P.C_p_0 = P.Gamma(3)*P.C_l_0 + P.Gamma(4)*P.C_n_0;
+    P.C_p_beta = P.Gamma(3)*P.C_l_beta + P.Gamma(4)*P.C_n_beta;
+    P.C_p_p = P.Gamma(3)*P.C_l_p + P.Gamma(4)*P.C_n_p;
+    P.C_p_r = P.Gamma(3)*P.C_l_r + P.Gamma(4)*P.C_n_r;
+    P.C_p_delta_a = P.Gamma(3)*P.C_l_delta_a + P.Gamma(4)*P.C_n_delta_a;
+    P.C_p_delta_r = P.Gamma(3)*P.C_l_delta_r + P.Gamma(4)*P.C_n_delta_r;
+    P.C_r_0 = P.Gamma(4)*P.C_l_0 + P.Gamma(8)*P.C_n_0;
+    P.C_r_beta = P.Gamma(4)*P.C_l_beta + P.Gamma(8)*P.C_n_beta;
+    P.C_r_p = P.Gamma(4)*P.C_l_p + P.Gamma(8)*P.C_n_p;
+    P.C_r_r = P.Gamma(4)*P.C_l_r + P.Gamma(8)*P.C_n_r;
+    P.C_r_delta_a = P.Gamma(4)*P.C_l_delta_a + P.Gamma(8)*P.C_n_delta_a;
+    P.C_r_delta_r = P.Gamma(4)*P.C_l_delta_r + P.Gamma(8)*P.C_n_delta_r;
+    
     for fn = fieldnames(P)'
        param.(fn{1}) = P.(fn{1});
     end
