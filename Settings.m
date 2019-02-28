@@ -9,6 +9,8 @@ clc
 % Add Path
 Parameters;
 
+% This is the version I want.
+
 %% Initial Conditions
 % Trim
 param.optimizer.name = "gradiant"; % fminsearch gradiant
@@ -256,7 +258,7 @@ K_theta_DC = param.delta_e_sat_lim.high/e_max_theta*sign(a_theta_3)*a_theta_3/(a
 
 control.controller_type = controllers.PID;
 
-observe.type = observers.m; % O,e,p,m
+observe.type = observers.e; % O,e,p,m
 % observe.L = gains_O(t_r./5,zeta,p_d,param.A,param.B,param.C_m); % 0.05;
 observe.x_names = ["p_{n}";"p_{e}";"p_{d}";"u";"v";"w";"\phi";"\theta";"\psi";"p";"q";"r"];
 observe.u_names = ["delta_a";"delta_e";"delta_r";"delta_t"];
