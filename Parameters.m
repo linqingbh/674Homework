@@ -78,6 +78,7 @@ param.N.bias             = [0,0,0,0];
 % Wind
 param.W_s = [0;1;-1];
 param.gust_condition = 'moderate';
+param.declination = 2.9*pi/180;
 
 %% Simulation Dimensions
 
@@ -111,7 +112,7 @@ t = settings.start:settings.step:settings.end;
 settings.publish     = 0.2;    % s
 settings.window      = [-1000,1000,-1000,1000,0,200]; % m
 settings.view        = [45,45];
-settings.gph_per_img = 6;
+settings.gph_per_img = 3;
 settings.labels      = ["p_{e} - Latitude (m)","p_{n} - Longitude (m)","-p_{d} - Altitude (m)"];
 
 %% Functions

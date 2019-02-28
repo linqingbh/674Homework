@@ -84,7 +84,7 @@ classdef dynamics < handle
             
         end
         
-        function new_state = propagate(self)
+        function [new_state,new_state_dot] = propagate(self)
             
             % Impliment uncertainty
             if self.implement_uncertainty
@@ -101,6 +101,7 @@ classdef dynamics < handle
             k3 = self.eqs_motion(self.step,self.x + self.step/2*k2, self.u,self.core);
             k4 = self.eqs_motion(self.step,self.x + self.step*k3, self.u,self.core);
             new_state = self.x + self.step/6 * (k1 + 2*k2 + 2*k3 + k4);
+            new_state_dot = self.eqs_motion(self.step,new_state,self.u,self.core);
 
             % Impliment uncertainty
             if self.implement_uncertainty
@@ -126,7 +127,7 @@ classdef dynamics < handle
                     throw = 1;
                 end
                 
-                self.x = self.propagate();
+                [self.x,x_dot] = self.propagate();
                 
                 [y_r,y_r_dot] = self.y_r(self.x,self.core);
                 
@@ -139,9 +140,8 @@ classdef dynamics < handle
                 
                 % Measure
                 measurments = zeros(size(self.sensor_names));
-                for j = 1:length(self.observers)
-                    indexes = self.get_indexes(self.sensor_names,self.sensors(j).output_names);
-                    measurments(indexes) = self.sensors(j).sense(y_r,t(i));
+                for j = 1:length(self.sensors)
+                    measurments(self.sensors(j).sensor_indexes) = self.sensors(j).sense(self.x,x_dot,t(i));
                 end
                 
                 % Observe
@@ -165,6 +165,7 @@ classdef dynamics < handle
                 
                 % Simulate Responce to new input
                 self.core.publish('x',self.x);
+                self.core.publish('measurements',measurments)
                 self.core.publish('y_r',y_r);
                 self.core.publish('y_r_dot',y_r_dot);
             end

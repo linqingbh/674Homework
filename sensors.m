@@ -86,7 +86,7 @@ classdef sensors < handle
                     self.sigma = 0;
                     initial = zeros(length(self.x_indexes),1);
             end
-            self.filter = my_filter(1,0.5,initial,0);
+            self.filter = my_filter(0,0.5,initial,0);
             if sense.exact
                 self.filter = my_filter(0,0.5,initial,0);
                 self.sat_lim.high = Inf;
@@ -137,6 +137,7 @@ classdef sensors < handle
                 % Save
                 self.y_m = reading;
                 self.y_m_filtered = reading_filtered;
+                self.last_update = t;
             else
                 reading = self.y_m;
                 reading_filtered = self.y_m_filtered;

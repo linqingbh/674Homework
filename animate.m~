@@ -34,7 +34,6 @@ classdef animate < handle
         history_handle
         show_hist
         plot
-        sensor_names
     end
     
     methods
@@ -78,7 +77,6 @@ classdef animate < handle
             self.e_names = "e_{" + param.x_names + "}";
             
             % Publishers & Subscribers
-            measurements = core.subscribe_specific('measurements',1);
             x = core.subscribe_specific('x',1);
             x_hat = core.subscribe_specific('x_hat',1);
             u = core.subscribe_specific('u',1);
@@ -159,8 +157,6 @@ classdef animate < handle
                                     data = y_r_dot(index,:);
                                 case "e"
                                     data = e(index,:);
-                                case "measurments"
-                                    data = measurements(index,:);
                             end
                             if negative
                                 data = -data;
@@ -209,7 +205,7 @@ classdef animate < handle
             drawnow
         end
         
-        function add_data(self,x,x_hat,e,u,r,y_r,y_r_dot,measurements,t)
+        function add_data(self,x,x_hat,e,u,r,y_r,y_r_dot,t)
             
             if self.plot
                 % Plot Data Figure
@@ -231,8 +227,6 @@ classdef animate < handle
                                 data = y_r_dot(index,:);
                             case "e"
                                 data = e(index,:);
-                            case "measurments"
-                                data = measurements(index,:);
                         end
                         if negative
                             data = -data;
@@ -255,7 +249,6 @@ classdef animate < handle
             r = self.core.subscribe_history('r');
             y_r = self.core.subscribe_history('y_r');
             y_r_dot = self.core.subscribe_history('y_r_dot');
-            measurements = self.core.subscribe_history('measurements');
             t = self.core.subscribe_history('t');
             e = x - x_hat;
             
@@ -285,7 +278,7 @@ classdef animate < handle
 
                         % Update the dispaly
                         self.redraw(x(:,i));
-                        self.add_data(x(:,1:i),x_hat(:,1:i),e(:,1:i),u(:,1:i),r(:,1:i),y_r(:,1:i),y_r_dot(:,1:i),measurements(:,1:i),t(:,1:i))
+                        self.add_data(x(:,1:i),x_hat(:,1:i),e(:,1:i),u(:,1:i),r(:,1:i),y_r(:,1:i),y_r_dot(:,1:i),t(:,1:i))
                     end
                 end
                 
@@ -294,7 +287,7 @@ classdef animate < handle
                 
             else
                 % Update the plots only
-                self.add_data(x,x_hat,e,u,r,y_r,y_r_dot,measurments,t)
+                self.add_data(x,x_hat,e,u,r,t)
             end
         end
         
@@ -330,9 +323,6 @@ classdef animate < handle
             elseif any(strcmp(self.e_names,name))
                 index = strcmp(self.e_names,name);
                 type = 'e';
-            elseif any(strcmp(self.sensor_names,name))
-                index = strcmp(self.sensor_names,name);
-                type = 'measurments';
             else
                 error("ERROR: Your trying to plot '" + name + "' which is not a plotable value.")
             end

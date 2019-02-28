@@ -205,7 +205,7 @@ settings.plot_names  = {%["p_{n} - Longitude (m)","p_{n}"];
                         ["GPS_n - Position north (m)","GPS_n","p_{n}"];
                         ["GPS_e - Position east (m)","GPS_e","p_{e}"];
                         ["GPS_h - Altitude (m)","GPS_h","y_{h}"];
-                        ["GPS_Vg - measured horizontal velocity (m/s)","GPS_Vg","u"];
+                        ["GPS_Vg - measured horizontal velocity (m/s)","u"];
                         ["GPS_chi - measured course (rad)","GPS_chi","y_{\chi}"];
                         ["Bar - measured static pressure (altitude) (Pa)","Bar"];
                         ["Pito - measured dynamic pressure (velocity) (Pa)","Pito"];
