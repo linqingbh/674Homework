@@ -138,7 +138,7 @@ classdef dynamics < handle
                 d_hat = zeros(size(self.observers));
                 for j = 1:length(self.observers)
                     indexes = self.get_indexes(self.x_names,self.observers(j).output_names);
-                    [measurements(indexes),d_hat(j)] = self.observers(j).observe(sensor_readings);
+                    [measurements(indexes),d_hat(j)] = self.observers(j).observe(sensor_readings,t(i));
                 end
                     
                 % Implimennt controller

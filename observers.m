@@ -27,6 +27,7 @@ classdef observers < handle
         d_hat
         t_gps
         t_sensor
+        time
     end
     
     properties (Constant)
@@ -62,7 +63,6 @@ classdef observers < handle
                 case self.e
                     
                 case self.m
-                    self.sensors = observe.sensor_update_rates
                 otherwise
                     % Parmeters
                     self.x_names = param.x_names;
@@ -126,7 +126,7 @@ classdef observers < handle
         function update_pressure_sensors(self)
         end
         
-        function [x_hat,d_hat] = observe(self,x,r,u,t)
+        function [x_hat,d_hat] = observe(self,x,t)
             
             self.time = t;
             
