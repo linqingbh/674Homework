@@ -43,6 +43,8 @@ param.take_off_pitch = 15*pi/180;
 
 % State Description
 param.x_names = ["p_{n}";"p_{e}";"p_{d}";"u";"v";"w";"\phi";"\theta";"\psi";"p";"q";"r"];
+param.sensor_names = ["GPS_n";"GPS_e";"GPS_h";"GPS_Vg";"GPS_chi";"Bar";"Pito";"Comp";"Accel_x";"Accel_y";"Accel_z";"RateGyro_p";"RateGyro_q";"RateGyro_r"];
+param.m_names = ["p_{n}";"p_{e}";"p_{d}";"u_a";"\phi";"\theta";"\psi";"p";"q";"r";"\chi";"V_gh";"u_w";"v_w";"w_w"];
 param.u_names = ["delta_a";"delta_e";"delta_r";"delta_t"];
 param.r_names = ["\chi","\phi","h","\theta","\beta","V_a"];
 

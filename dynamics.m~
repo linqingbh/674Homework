@@ -26,8 +26,6 @@ classdef dynamics < handle
         u_names
         x_names
         y_r
-        sensor_names
-        sensors
     end
     
     methods
@@ -45,7 +43,6 @@ classdef dynamics < handle
             self.u = core.subscribe('u');
             self.x_names = core.param.x_names;
             self.u_names = core.param.u_names;
-            self.sensor_names = core.param.sensor_names;
             
             % Functions
             self.eqs_motion = functions.eqs_motion;
@@ -53,7 +50,6 @@ classdef dynamics < handle
             self.observers = functions.observers;
             self.controller_architecture = functions.controller_architecture;
             self.y_r = functions.y_r;
-            self.sensors = functions.sensors;
             
             % Simulation Parameters
             self.time = settings.start;
@@ -138,10 +134,10 @@ classdef dynamics < handle
                 end
                 
                 % Measure
-                measurments = zeros(size(self.sensor_names));
+                measurments = zeros(size(param.sesnor_names));
                 for j = 1:length(self.observers)
-                    indexes = self.get_indexes(self.sensor_names,self.sensors(j).output_names);
-                    measurments(indexes) = self.sensors(j).sense(y_r,t(i));
+                    indexes = self.get_indexes(self.sensor_names,self.observers(j).output_names);
+                    measurments(indexes) = self.observers(j).observe(sensor_readings,t(i));
                 end
                 
                 % Observe

@@ -347,6 +347,48 @@ elseif strcmp(control.controller_type,controllers.PID)
     
 end
 
+%% Sensors
+sense.type = sensors.GPS;
+sense.x_names = ["p_{n}";"p_{e}";"p_{d}"];
+sense.sensor_names = ["GPS_n";"GPS_e";"GPS_h";"GPS_Vg";"GPS_chi"];
+core.functions.sensors(1) = sensors(sense,param);
+
+sense.type = sensors.Bar;
+sense.x_names = "p_{d}";
+sense.sensor_names = "Bar";
+core.functions.sensors(2) = sensors(sense,param);
+
+sense.type = sensors.Pito;
+sense.x_names = "u";
+sense.sensor_names = "Pito";
+core.functions.sensors(3) = sensors(sense,param);
+
+sense.type = sensors.Comp;
+sense.x_names = "\psi";
+sense.sensor_names = "Comp";
+core.functions.sensors(4) = sensors(sense,param);
+
+sense.type = sensors.Accel;
+sense.x_names = ["u","v","w","\phi","\theta","p","q","r"];
+sense.sensor_names = ["Accel_x";"Accel_y";"Accel_z"];
+core.functions.sensors(5) = sensors(sense,param);
+
+% sense.type = sensors.Exact;
+% sense.x_names = ["\phi","\theta","\psi"];
+% sense.sensor_names = ["Accel_x";"Accel_y";"Accel_z"];
+% core.functions.sensors(5) = sensors(sense,param);
+
+sense.type = sensors.RateGyro;
+sense.x_names = ["p","q","r"];
+sense.sensor_names = ["RateGyro_p";"RateGyro_q";"RateGyro_r"];
+core.functions.sensors(6) = sensors(sense,param);
+
+% sense.type = sensors.Exact;
+% sense.x_names = ["u","v","w"];
+% sense.sensor_names = ["u";"v";"w"];
+% core.functions.sensors(7) = sensors(sense,param);
+
+
 %% Run Program
 Simulation;
 
