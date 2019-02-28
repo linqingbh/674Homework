@@ -63,7 +63,6 @@ classdef observers < handle
                 case self.e
                     
                 case self.m
-                    self.sensors = observe.sensor_update_rates
                 otherwise
                     % Parmeters
                     self.x_names = param.x_names;
