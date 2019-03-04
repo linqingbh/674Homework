@@ -106,21 +106,21 @@ classdef dynamics < handle
             for i = 2:length(r)
                 disp('----------------------------------------')
                 dt = t(i) - t(i-1);
-                tic
+                
                 [state,state_dot] = self.propagate(dt);
-                toc
+                
                 % Impliment uncertianty
                 if self.implement_uncertainty
                     state = uncertainty(state,self.N,self.uncertian_N);
                 end
-                tic
+
                 % Measure
                 sensor_data = zeros(size(self.param.sensor_names));
                 filtered_data = zeros(size(self.param.sensor_names));
                 for j = 1:length(self.sensors)
                     [sensor_data(self.sensors(j).sensor_indexes),filtered_data(self.sensors(j).sensor_indexes)] = self.sensors(j).sense(state,state_dot,t(i));
                 end
-                toc
+                
                 % Convert
                 y_m = self.get_y_m(filtered_data,self.param);
                 % Observe
@@ -132,11 +132,10 @@ classdef dynamics < handle
                 % Convert
                 [y_r,y_r_dot] = self.get_y_r(y_m,x_hat);
                 % Need to fix d_hat!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-                tic
+                
                 % Implimennt controller
                 [self.u,r(:,i)] = self.controller_architecture(self.controllers,y_r,y_r_dot,r(:,i),d_hat(1),t(i),self.param);
-                toc
-                tic
+
                 % Save history
                 self.core.publish_specific('r',r(:,i),i);
                 self.core.publish('x',self.x);
@@ -148,7 +147,6 @@ classdef dynamics < handle
                 self.core.publish('y_r',y_r);
                 self.core.publish('y_r_dot',y_r_dot);
                 self.core.publish('u',self.u);
-                toc
             end
             
             

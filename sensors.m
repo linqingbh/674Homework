@@ -137,6 +137,7 @@ classdef sensors < handle
                 % Save
                 self.y_m = reading;
                 self.y_m_filtered = reading_filtered;
+                self.last_update = t;
             else
                 reading = self.y_m;
                 reading_filtered = self.y_m_filtered;
