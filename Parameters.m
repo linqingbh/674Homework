@@ -43,9 +43,9 @@ param.take_off_pitch = 15*pi/180;
 
 % State Description
 param.x_names = ["p_{n}";"p_{e}";"p_{d}";"u";"v";"w";"\phi";"\theta";"\psi";"p";"q";"r"];
-param.sensor_names = ["GPS_n";"GPS_e";"GPS_h";"GPS_Vg";"GPS_chi";"Bar";"Pito";"Comp";"Accel_x";"Accel_y";"Accel_z";"RateGyro_p";"RateGyro_q";"RateGyro_r";"u";"v";"w"];
+param.z_names = ["GPS_n";"GPS_e";"GPS_h";"GPS_Vg";"GPS_chi";"Bar";"Pito";"Comp";"Accel_x";"Accel_y";"Accel_z";"RateGyro_p";"RateGyro_q";"RateGyro_r";"u";"v";"w"];
 param.m_names = ["p_{n}";"p_{e}";"p_{d}";"u_a";"\phi";"\theta";"\psi";"p";"q";"r";"\chi";"V_gh";"u_w";"v_w";"w_w"];
-param.r_names = ["\chi";"\phi";"p_{d}";"\theta";"\beta";"V_a"];
+param.r_names = ["\chi";"\phi";"h";"\theta";"\beta";"V_a"];
 param.u_names = ["delta_a";"delta_e";"delta_r";"delta_t"];
 
 param.x_is_angle = [false;false;false;false;false;false;true;true;true;false;false;false];
@@ -78,7 +78,7 @@ param.N.random           = [0.001,0.001,0,0];
 param.N.bias             = [0,0,0,0];
 
 % Wind
-base = [0;1;1]; % NEU
+base = [0;0;0]; % NEU
 gust = wind.steady;
 param.wind = wind(gust,base,param.V_design);
 
@@ -111,14 +111,14 @@ param.tail_h = 0.1*scale;
 % Simulation
 settings.start       = 0;      % s
 settings.step        = 0.02;   % s
-settings.end         = 100;     % s
+settings.end         = 5;     % s
 t = settings.start:settings.step:settings.end;
 
-settings.publish     = 0.2;    % s
-settings.window      = [-1000,1000,-1000,1000,0,200]; % m
-settings.view        = [45,45];
-settings.gph_per_img = 6;
-settings.labels      = ["p_{e} - Latitude (m)","p_{n} - Longitude (m)","h - Altitude (m)"];
+settings.playback_rate  = 1;
+settings.window         = [-1000,1000,-1000,1000,0,200]; % m
+settings.view           = [45,45];
+settings.gph_per_img    = 6;
+settings.labels         = ["p_{e} - Latitude (m)","p_{n} - Longitude (m)","h - Altitude (m)"];
 
 %% Functions
 
@@ -146,12 +146,15 @@ function [u,r] = controller_architecture(controllers,y_r,y_r_dot,r,d_hat,t,param
         u(4,1) = 1;
     else
         % Saturate
-        r(3) = min(param.h_sat_lim.high-y_r(3),r(3));
-        r(3) = max(param.h_sat_lim.low-y_r(3),r(3));
+        r_sat = r;
+        r_sat(3) = min(y_r(3)+param.h_sat_lim.high,r(3));
+        r_sat(3) = max(y_r(3)+param.h_sat_lim.low,r(3));
         
         % Controller
-        [u(2,1),r] = controllers(3).control(y_r,y_r_dot,r,d_hat,t);
+        [u(2,1),r_sat] = controllers(3).control(y_r,y_r_dot,r_sat,d_hat,t);
+        r(4) = r_sat(4);
         [u(4,1),r] = controllers(4).control(y_r,y_r_dot,r,d_hat,t);
+        
     end
     
     %u(1,1) = param.u_0(1);
@@ -203,7 +206,6 @@ end
 
 % Equations of Motion
 function x_dot = eqs_motion(t,x,input,param)
-
     %------------------------------------------------
     % Aerodynamics
     
@@ -424,9 +426,7 @@ end
 
 % y_r Conversion
 function [y_r_out,y_r_dot_out] = get_y_r(y_m,x_hat)
-
-    chi = y_m(11);
-    V_w_b = y_m(13:15);
+    V_w_b = [0;0;0];%y_m(13:15);
     V_a_b_dot = 0; % assume unaccelorated flight. Needs updating!!!!
 
     p_d = x_hat(3);
@@ -455,25 +455,26 @@ function [y_r_out,y_r_dot_out] = get_y_r(y_m,x_hat)
     V_a = sqrt(sum(V_a_b.^2));
     V_a_dot = sqrt(sum(V_a_b_dot.^2));
     beta = atan2(v_a,sqrt(u_a^2+w_a^2));
+    chi = atan2(V_g_g(2),V_g_g(1));%y_m(11);
     beta_dot = 0;%1/(v_a^2/(u_a^2+w_a^2)+1)*(v_a_dot/sqrt(u_a^2+w_a^2)-v_a*(u_a*u_a_dot+w_a*w_a_dot)/(u_a^2+w_a^2)^(3/2));
     
     rotational_velocity = [1,sin(phi)*tan(theta),cos(phi)*tan(theta);
                            0,cos(phi),-sin(phi);
                            0,sin(phi)/cos(theta),cos(phi)/cos(theta)]*[p;q;r];
-    phi_dot = rotational_velocity(1);
+    phi_dot = rotational_velocity(1); % Check this
     theta_dot = rotational_velocity(2);
     chi_dot = rotational_velocity(3);
     
     y_r_out(1,1) = chi;
     y_r_out(2,1) = phi;
-    y_r_out(3,1) = p_d;
+    y_r_out(3,1) = -p_d;
     y_r_out(4,1) = theta;
     y_r_out(5,1) = beta;
     y_r_out(6,1) = V_a;
     
     y_r_dot_out(1,1) = chi_dot;
     y_r_dot_out(2,1) = phi_dot;
-    y_r_dot_out(3,1) = p_d_dot;
+    y_r_dot_out(3,1) = -p_d_dot;
     y_r_dot_out(4,1) = theta_dot;
     y_r_dot_out(5,1) = beta_dot;
     y_r_dot_out(6,1) = V_a_dot;

@@ -88,7 +88,7 @@ classdef dynamics < handle
             
             % Runga Kuta
             [self.x,new_state_dot] = rk4(@(t,state) self.eqs_motion(t,state,actual_u,self.param),[0,dt],self.x,true);
-
+            
             % Impliment uncertainty
             if self.implement_uncertainty
                 new_state = uncertainty(self.x,self.D_out,self.uncertian_x);
@@ -104,48 +104,58 @@ classdef dynamics < handle
             
             % Iterate through each timestep
             for i = 2:length(r)
-                disp('----------------------------------------')
+                
                 dt = t(i) - t(i-1);
                 
-                [state,state_dot] = self.propagate(dt);
+                [state,x_dot] = self.propagate(dt);
                 
                 % Impliment uncertianty
                 if self.implement_uncertainty
-                    state = uncertainty(state,self.N,self.uncertian_N);
+                    uncertian_state = uncertainty(state,self.N,self.uncertian_N);
+                else
+                    uncertian_state = state;
                 end
 
                 % Measure
-                sensor_data = zeros(size(self.param.sensor_names));
-                filtered_data = zeros(size(self.param.sensor_names));
+                z = zeros(size(self.param.z_names));
+                z_hat = zeros(size(self.param.z_names));
+                z_filtered = zeros(size(self.param.z_names));
                 for j = 1:length(self.sensors)
-                    [sensor_data(self.sensors(j).sensor_indexes),filtered_data(self.sensors(j).sensor_indexes)] = self.sensors(j).sense(state,state_dot,t(i));
+                    [z_hat(self.sensors(j).z_indexes),z_filtered(self.sensors(j).z_indexes),z(self.sensors(j).z_indexes)] = self.sensors(j).sense(uncertian_state,x_dot,t(i));
                 end
                 
                 % Convert
-                y_m = self.get_y_m(filtered_data,self.param);
+                y_m_hat = self.get_y_m(z_filtered,self.param);
+                y_m = self.get_y_m(z,self.param);
                 % Observe
                 x_hat = zeros(size(state));
-                d_hat = zeros(size(self.observers));
+                d_hat = zeros(size(r(:,i)));
                 for j = 1:length(self.observers)
-                    [x_hat(self.observers(j).x_indexes),d_hat(j)] = self.observers(j).observe(y_m,r(:,i),self.u,t(i));
+                    [x_hat(self.observers(j).x_indexes),d_hat(self.observers(j).r_indexes)] = self.observers(j).observe(y_m_hat,r(:,i),self.u,t(i));
                 end
+                
                 % Convert
-                [y_r,y_r_dot] = self.get_y_r(y_m,x_hat);
+                [y_r_hat,y_r_dot_hat] = self.get_y_r(y_m_hat,x_hat);
+                [y_r,y_r_dot] = self.get_y_r(y_m,self.x);
                 % Need to fix d_hat!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
                 
                 % Implimennt controller
-                [self.u,r(:,i)] = self.controller_architecture(self.controllers,y_r,y_r_dot,r(:,i),d_hat(1),t(i),self.param);
+                [self.u,r(:,i)] = self.controller_architecture(self.controllers,y_r_hat,y_r_dot_hat,r(:,i),d_hat(1),t(i),self.param);
 
                 % Save history
                 self.core.publish_specific('r',r(:,i),i);
                 self.core.publish('x',self.x);
-                self.core.publish('x_dot',state_dot);
-                self.core.publish('sensor_data',sensor_data);
-                self.core.publish('y_m',y_m);
+                self.core.publish('x_dot',x_dot);
+                self.core.publish('z',z);
+                self.core.publish('z_hat',z_hat);
+                self.core.publish('y_m',y_m_hat);
+                self.core.publish('y_m_hat',y_m_hat);
                 self.core.publish('x_hat',x_hat);
                 self.core.publish('d_hat',d_hat);
                 self.core.publish('y_r',y_r);
+                self.core.publish('y_r_hat',y_r_hat);
                 self.core.publish('y_r_dot',y_r_dot);
+                self.core.publish('y_r_dot_hat',y_r_dot_hat);
                 self.core.publish('u',self.u);
             end
             

@@ -1,5 +1,4 @@
 function [states,states_dot] = rk4(fun,time,initial,end_flag)
-%     tic
     if ~exist('end_flag','var'), end_flag = false;end
     states = zeros(length(initial),length(time));
     states_dot = zeros(length(initial),length(time));
@@ -18,5 +17,4 @@ function [states,states_dot] = rk4(fun,time,initial,end_flag)
         states = states(:,2:end);
         states_dot = states_dot(:,2:end);
     end
-    toc
 end

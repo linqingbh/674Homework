@@ -15,10 +15,11 @@ classdef sensors < handle
         
         % For Implimentation
         x_indexes
-        sensor_indexes
+        z_indexes
         filter
         y_m
         y_m_filtered
+        y_m_hat
         
         % Gps Specific Values
         k_gps = 1/1600;
@@ -40,7 +41,7 @@ classdef sensors < handle
         function self = sensors(sense,param)
             if ~isfield(sense,'exact'),sense.exact = false;end
             self.x_indexes = get_indexes(param.x_names,sense.x_names);
-            self.sensor_indexes = get_indexes(param.sensor_names,sense.sensor_names);
+            self.z_indexes = get_indexes(param.z_names,sense.z_names);
             self.eta = @self.normal_error;
             switch sense.type
                 case self.GPS
@@ -112,7 +113,7 @@ classdef sensors < handle
             eta = 0;
         end
         
-        function [reading,reading_filtered] = sense(self,x,x_dot,t)
+        function [reading,reading_filtered,measurment] = sense(self,x,x_dot,t)
             dt = t - self.last_update;
             
             if dt >= 1/self.update_rate
@@ -137,10 +138,12 @@ classdef sensors < handle
                 % Save
                 self.y_m = reading;
                 self.y_m_filtered = reading_filtered;
+                self.y_m_hat = measurment;
                 self.last_update = t;
             else
                 reading = self.y_m;
                 reading_filtered = self.y_m_filtered;
+                measurment = self.y_m_hat;
             end
         end
     end

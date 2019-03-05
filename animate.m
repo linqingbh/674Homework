@@ -8,9 +8,7 @@ classdef animate < handle
         gph_per_img
 
         % Playback Info
-        real_time
-        publish
-        step
+        playback_rate
         animation
         plot
         active_fig
@@ -50,9 +48,7 @@ classdef animate < handle
             self.gph_per_img = settings.gph_per_img;
             
             % Playback Info
-            self.real_time = settings.real_time;
-            self.publish = settings.publish;
-            self.step = settings.step;
+            self.playback_rate = settings.playback_rate;
             self.animation = settings.animation;
             self.plot = settings.plot;
             self.active_fig = settings.active_fig;
@@ -71,46 +67,12 @@ classdef animate < handle
             self.r_is_angle = param.r_is_angle;
             
             % Names
-            r_names = "r_{" + param.r_names + "}";
-            x_names = param.x_names;
-            x_dot_names = param.x_names + "_{dot}";
-            sensor_names = param.sensor_names;
-            y_m_names = "y_m_{" + param.m_names + "}";
-            x_hat_names = "x_hat_{" + param.x_names + "}";
-            d_hat_names = "d_hat_{" + param.r_names + "}";
-            d_hat_e_names = "d_hat_e_{" + param.x_names + "}";
-            y_r_names = "y_r_{" + param.r_names + "}";
-            y_r_e_names = "y_r_e_{" + param.r_names + "}";
-            y_r_dot_names = "y_r_dot_{" + param.r_names + "}";
-            u_names = param.u_names;
-            all_names = [r_names;x_names;x_dot_names;sensor_names;y_m_names;x_hat_names;d_hat_names;d_hat_e_names;y_r_names;y_r_e_names;y_r_dot_names;u_names];
-            var_to_plot_names = [];
-            for i = 1:length(settings.plot_names)
-                var_to_plot_names = [var_to_plot_names;settings.plot_names{i}(2:end).']; %#ok<AGROW>
-            end
-            self.var_indexes = get_indexes(all_names,var_to_plot_names);
-            
-            
-            % Publishers & Subscribers
-            t = self.core.subscribe_specific('t',1);
-            r = self.core.subscribe_specific('r',1);
-            x = self.core.subscribe_specific('x',1);
-            x_dot = self.core.subscribe_specific('x_dot',1);
-            sensor_data = self.core.subscribe_specific('sensor_data',1);
-            y_m = self.core.subscribe_specific('y_m',1);
-            x_hat = self.core.subscribe_specific('x_hat',1);
-            d_hat = self.core.subscribe_specific('d_hat',1);
-            d_hat_e = controllers.get_error(x_hat,x,self.x_is_angle);
-            y_r = self.core.subscribe_specific('y_r',1);
-            y_r_e = controllers.get_error(y_r,r,self.r_is_angle);
-            y_r_dot = self.core.subscribe_specific('y_r_dot',1);
-            u = self.core.subscribe_specific('u',1);
-            
-            data = [r;x;x_dot;sensor_data;y_m;x_hat;d_hat;d_hat_e;y_r;y_r_e;y_r_dot;u];
-            data = data(self.var_indexes,:);
-            
-            
+            [var_names,var_to_plot_names] = self.get_names();
+            self.var_indexes = get_indexes(var_names,var_to_plot_names);
+
             % Initialize Figures ------------------------------------------
+            [x,data,t] = self.get_data(1);
+            
             % Assign figure numbers
             number_of_plots = length(settings.plot_names);
             number_of_figs = ceil(number_of_plots/self.gph_per_img);
@@ -127,8 +89,8 @@ classdef animate < handle
                 [points,colors,history] = self.get_drawing(x,self.settings,self.param);
                 
                 % Plot
-                figure(1),clf; 
-                clf
+                fig = figure(1);clf
+                fig.WindowStyle = 'docked';
                 hold on
                 if self.show_hist
                     for i = 1:length(history)
@@ -152,7 +114,8 @@ classdef animate < handle
             if self.plot
                 l = 1;
                 for k = plot_figure
-                    figure(k), clf
+                    fig = figure(k);clf
+                    fig.WindowStyle = 'docked';
                     if (k ~= plot_figure(end)) || ~rem(number_of_plots,self.gph_per_img) 
                         on_this_plot = self.gph_per_img;
                     else
@@ -163,6 +126,7 @@ classdef animate < handle
                         hold on
                         for j = 2:length(settings.plot_names{self.gph_per_img*(k-plot_figure(1))+i})
                             self.plot_handles(l) = plot(t,data(l,:),'linewidth',1.5);
+                            l = l+1;
                         end
                         grid on
                         xlabel('t - Time (s)')
@@ -197,9 +161,6 @@ classdef animate < handle
                     'Y',points{i}(2,:),...
                     'Z',points{i}(3,:))
             end
-            
-            % Redraw
-            drawnow
         end
         
         function add_data(self,t,data)
@@ -208,48 +169,79 @@ classdef animate < handle
                 for i = 1:length(self.plot_handles)
                     set(self.plot_handles(i),'XData',t,'YData',data(i,:));
                 end
-
-                % Redraw
-                drawnow
+            end
+        end
+        
+        function [x,data,t] = get_data(self,time_indexes)
+            data = [self.core.subscribe_history('r');
+                    self.core.subscribe_history('x');
+                    self.core.subscribe_history('x_dot');
+                    self.core.subscribe_history('z');
+                    self.core.subscribe_history('z_hat');
+                    self.core.subscribe_history('y_m');
+                    self.core.subscribe_history('y_m_hat');
+                    self.core.subscribe_history('x_hat');
+                    self.core.subscribe_history('d_hat');
+                    controllers.get_error(self.core.subscribe_history('x_hat'),self.core.subscribe_history('x'),self.x_is_angle);
+                    self.core.subscribe_history('y_r');
+                    self.core.subscribe_history('y_r_hat');
+                    controllers.get_error(self.core.subscribe_history('y_r'),self.core.subscribe_history('r'),self.r_is_angle);
+                    self.core.subscribe_history('y_r_dot');
+                    self.core.subscribe_history('y_r_dot_hat');
+                    self.core.subscribe_history('u')];
+            
+            if exist('time_indexes','var')
+                t = self.core.subscribe_specific('t',time_indexes);
+                x = self.core.subscribe_specific('x',time_indexes);
+                data = data(self.var_indexes,time_indexes);
+            else
+                t = self.core.subscribe_history('t');
+                x = self.core.subscribe_history('x');
+                data = data(self.var_indexes,:);
+            end
+        end
+        
+        function [var_names,plot_names] = get_names(self)
+            var_names = ["r_{" + self.param.r_names + "}";
+                         self.param.x_names;
+                         self.param.x_names + "_{dot}";
+                         self.param.z_names;
+                         "z_hat_{" + self.param.z_names + "}";
+                         "y_m_{" + self.param.m_names + "}";
+                         "y_m_hat_{" + self.param.m_names + "}";
+                         "x_hat_{" + self.param.x_names + "}";
+                         "d_hat_{" + self.param.r_names + "}";
+                         "d_hat_e_{" + self.param.x_names + "}";
+                         "y_r_{" + self.param.r_names + "}";
+                         "y_r_hat_{" + self.param.r_names + "}";
+                         "y_r_e_{" + self.param.r_names + "}";
+                         "y_r_dot_{" + self.param.r_names + "}";
+                         "y_r_dot_hat_{" + self.param.r_names + "}";
+                         self.param.u_names];
+            plot_names = [];
+            for i = 1:length(self.settings.plot_names)
+                plot_names = [plot_names;...
+                    self.settings.plot_names{i}(2:end).']; %#ok<AGROW>
             end
         end
         
         function play(self)
             
             % Get time
-            t = self.core.subscribe_history('t');
-            time_indexes = 1:ceil(self.publish/self.step):length(t);
-            
-            % Get Data
-            r = self.core.subscribe_history('r');
-            x = self.core.subscribe_history('x');
-            x_dot = self.core.subscribe_history('x_dot');
-            sensor_data = self.core.subscribe_history('sensor_data');
-            y_m = self.core.subscribe_history('y_m');
-            x_hat = self.core.subscribe_history('x_hat');
-            d_hat = self.core.subscribe_history('d_hat');
-            d_hat_e = controllers.get_error(x_hat,x,self.x_is_angle);
-            y_r = self.core.subscribe_history('y_r');
-            y_r_e = controllers.get_error(y_r,r,self.r_is_angle);
-            y_r_dot = self.core.subscribe_history('y_r_dot');
-            u = self.core.subscribe_specific('u');
-            
-            data = [r;x;x_dot;sensor_data;y_m;x_hat;d_hat;d_hat_e;y_r;y_r_e;y_r_dot;u];
-            data = data(self.var_indexes,time_indexes);
+            [x,data,t] = self.get_data();
             
             if self.animation
                 
                 time_watch = tic; % Timer that iterates through each image
-
+                
                 % Iterate through each timestep
-                for i = 1:length(x)
-
-                    % Wait for the time to move on
-                    while (toc(time_watch) < t(i)) && self.real_time,end
-
+                while any(t>=toc(time_watch)/self.playback_rate)
+                    j = find(t>=toc(time_watch)/self.playback_rate,1);
+                    
                     % Update the dispaly
-                    self.redraw(x(:,i));
-                    self.add_data(data(:,1:i))
+                    self.redraw(x(:,j));
+                    self.add_data(t(1:j),data(:,1:j))
+                    drawnow limitrate
                 end
                 
                 % For information's sake, display the time of the output
@@ -258,6 +250,7 @@ classdef animate < handle
             else
                 % Update the plots only
                 self.add_data(t,data)
+                drawnow limitrate
             end
         end
     end

@@ -20,7 +20,7 @@ param.trim.h_0 = 100;
 y_m_0 = [param.x_0(1:3);param.trim.V_a;param.x_0(7:12);param.x_0(9);param.trim.V_a;0;0;0];
 
 x_0s = zeros(size(param.x_names));
-sensor_0s = zeros(size(param.sensor_names));
+z_0s = zeros(size(param.z_names));
 m_0s = zeros(size(param.m_names));
 r_0s = zeros(size(param.r_names));
 u_0s = zeros(size(param.u_names));
@@ -51,28 +51,28 @@ square3 = function_generator(input,period,amplitude,offset,phase_delay,t);
 r = [square1*pi;line;square2*50+100;line;line;square3*10+param.trim.V_a];
 
 %% Simulation Parameters
-settings.animation   = true;
-settings.plot        = true;
-settings.real_time   = false;
-settings.simulate    = true;
-settings.plot_names  = {%["p_{n} - Longitude (m)","p_{n}"];
-                        %["p_{e} - Latitude (m)","p_{e}"];
-                        ["p_{d} - Altitude (m)","p_{d}","r_{p_{d}}"];
-                        ["\theta - Pitch (rad)","\theta","r_{\theta}"];%,"y_{\theta}_{dot}"];
-                        ["\chi - Course (rad)","y_r_{\chi}","r_{\chi}"];
-                        ["\phi - Roll (rad)","\phi","r_{\phi}"];%,"y_{\phi}_{dot}"];
-                        ["\beta - Sideslip (rad)","y_r_{\beta}","r_{\beta}"];
-                        %["\psi - Yaw (rad)","\psi"]
-                        ["V_a - Forward Velocity (m/s)","y_r_{V_a}","r_{V_a}"];
-                        ["\delta_{a} - Ailorons (rad)","delta_a"];
-                        ["\delta_{e} - Elevator (rad)","delta_e"];
-                        ["\delta_{r} - Ruder (rad)","delta_r"];
-                        ["\delta_{t} - Throttle (%)","delta_t"];
-                        ["y_{r}_{dot} - Rate of Change","y_r_dot_{p_{d}}","y_r_dot_{\theta}","y_r_dot_{\chi}","y_r_dot_{\phi}","y_r_dot_{\beta}","y_r_dot_{V_a}"]
-                        %["h_dot - Rate of Climb (m/s)","y_{h}_{dot}"]
-                        };
 settings.active_fig  = 2;
 settings.show_hist   = true;
+settings.animation   = true;
+settings.plot        = true;
+settings.simulate    = true;
+settings.plot_names  = {%["p_{n} - Longitude (m)","p_{n}"];
+%                         ["p_{e} - Latitude (m)","p_{e}"];
+                        ["p_{d} - Altitude (m)","y_r_{h}","r_{h}"];
+                        ["\theta - Pitch (rad)","y_r_{\theta}","r_{\theta}"];%,"y_{\theta}_{dot}"];
+                        ["\chi - Course (rad)","y_r_{\chi}","r_{\chi}"];
+                        ["\phi - Roll (rad)","y_r_{\phi}","r_{\phi}"];%,"y_{\phi}_{dot}"];
+%                         ["\beta - Sideslip (rad)","y_r_{\beta}","r_{\beta}"]
+%                         ["\psi - Yaw (rad)","\psi"]
+%                         ["V_a - Forward Velocity (m/s)","y_r_{V_a}","r_{V_a}"];
+%                         ["\delta_{a} - Ailorons (rad)","delta_a"];
+%                         ["\delta_{e} - Elevator (rad)","delta_e"];
+%                         ["\delta_{r} - Ruder (rad)","delta_r"];
+%                         ["\delta_{t} - Throttle (%)","delta_t"];
+%                         ["y_{r}_{dot} - Rate of Change","y_r_dot_{p_{d}}","y_r_dot_{\theta}","y_r_dot_{\chi}","y_r_dot_{\phi}","y_r_dot_{\beta}","y_r_dot_{V_a}"]
+%                         ["h_dot - Rate of Climb (m/s)","y_{h}_{dot}"]
+                        };
+
                     
 % General Variable to implement uncertainty
 settings.implement_uncertainty = false;
@@ -85,13 +85,17 @@ core.publish_list("t",t)
 core.publish_list("r",r)
 core.publish("x",param.x_0)
 core.publish("x_dot",x_0s)
-core.publish("sensor_data",sensor_0s)
+core.publish("z",z_0s)
+core.publish("z_hat",z_0s)
 core.publish("y_m",y_m_0)
+core.publish("y_m_hat",y_m_0)
 core.publish("x_hat",x_0s)
 core.publish("d_hat",r_0s)
-core.publish("u",u_0s)
 core.publish("y_r",param.y_r_0)
+core.publish("y_r_hat",r_0s)
 core.publish("y_r_dot",r_0s)
+core.publish("y_r_dot_hat",r_0s)
+core.publish("u",u_0s)
 core.settings = settings;
 core.param = param;
 core.functions = functions;
@@ -122,42 +126,42 @@ sense.exact = true;
 
 sense.type = sensors.GPS;
 sense.x_names = ["p_{n}";"p_{e}";"p_{d}"];
-sense.sensor_names = ["GPS_n";"GPS_e";"GPS_h";"GPS_Vg";"GPS_chi"];
+sense.z_names = ["GPS_n";"GPS_e";"GPS_h";"GPS_Vg";"GPS_chi"];
 core.functions.sensors(1) = sensors(sense,param);
 
 sense.type = sensors.Bar;
 sense.x_names = "p_{d}";
-sense.sensor_names = "Bar";
+sense.z_names = "Bar";
 core.functions.sensors(2) = sensors(sense,param);
 
 sense.type = sensors.Pito;
 sense.x_names = "u";
-sense.sensor_names = "Pito";
+sense.z_names = "Pito";
 core.functions.sensors(3) = sensors(sense,param);
 
 sense.type = sensors.Comp;
 sense.x_names = "\psi";
-sense.sensor_names = "Comp";
+sense.z_names = "Comp";
 core.functions.sensors(4) = sensors(sense,param);
 
 % sense.type = sensors.Accel;
 % sense.x_names = ["u","v","w","\phi","\theta","p","q","r"];
-% sense.sensor_names = ["Accel_x";"Accel_y";"Accel_z"];
+% sense.z_names = ["Accel_x";"Accel_y";"Accel_z"];
 % core.functions.sensors(5) = sensors(sense,param);
 
 sense.type = sensors.Exact;
 sense.x_names = ["\phi","\theta","\psi"];
-sense.sensor_names = ["Accel_x";"Accel_y";"Accel_z"];
+sense.z_names = ["Accel_x";"Accel_y";"Accel_z"];
 core.functions.sensors(5) = sensors(sense,param);
 
 sense.type = sensors.RateGyro;
 sense.x_names = ["p","q","r"];
-sense.sensor_names = ["RateGyro_p";"RateGyro_q";"RateGyro_r"];
+sense.z_names = ["RateGyro_p";"RateGyro_q";"RateGyro_r"];
 core.functions.sensors(6) = sensors(sense,param);
 
 sense.type = sensors.Exact;
 sense.x_names = ["u","v","w"];
-sense.sensor_names = ["u";"v";"w"];
+sense.z_names = ["u";"v";"w"];
 core.functions.sensors(7) = sensors(sense,param);
 
 %% Observers
@@ -238,7 +242,7 @@ switch control.type
         control.K.P = 2*zeta_h*w_n_h/(K_theta_DC*param.V_design);
         control.K.I = w_n_h^2/(K_theta_DC*param.V_design);
         control.K.D = 0;
-        control.r_names = "p_{d}";
+        control.r_names = "h";
         control.u_names = "\theta";
         core.functions.controllers(3) = controllers(control,core);
         % Ptch attitude hold
