@@ -61,10 +61,6 @@ classdef controllers < handle
             self.r_out_indexes = get_indexes(param.r_names,control.u_names);
             self.u_indexes = get_indexes(param.u_names,control.u_names);
             
-            if isempty(self.r_in_indexes)
-                throw = 1;
-            end
-            
             % Param
             self.K = control.K;
             
@@ -117,8 +113,9 @@ classdef controllers < handle
         end
         
         function saturation_anti_windup(self,u_unsat,u_sat)
-            if self.K.I == 0, K_I = 1;else,K_I=self.K.I;end
-            self.intigrator_correction = self.intigrator_correction + 1./K_I.*(u_unsat - u_sat);
+            if self.K.I ~= 0
+                self.intigrator_correction = self.intigrator_correction + 1./self.K.I.*(u_unsat - u_sat);
+            end
         end
         
         function derivative_anti_windup(self,velocity,dt)
@@ -145,7 +142,7 @@ classdef controllers < handle
             % Execute Controller
             switch self.type
                 case self.OL
-                    u = self.plan(:,self.t_vec>=t);
+                    u = self.plan(:,find(self.t_vec>=t,1));
                 case self.PID
                     u_P = self.error(end);
                     u_I = sum_of_error;

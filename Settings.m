@@ -51,9 +51,9 @@ square3 = function_generator(input,period,amplitude,offset,phase_delay,t);
 r = [square1*pi;line;square2*50+100;line;line;square3*10+param.trim.V_a];
 
 %% Simulation Parameters
-settings.active_fig  = 2;
+settings.active_fig  = 1;
 settings.show_hist   = true;
-settings.animation   = true;
+settings.animation   = false;
 settings.plot        = true;
 settings.simulate    = true;
 settings.plot_names  = {%["p_{n} - Longitude (m)","p_{n}"];
@@ -69,7 +69,7 @@ settings.plot_names  = {%["p_{n} - Longitude (m)","p_{n}"];
 %                         ["\delta_{e} - Elevator (rad)","delta_e"];
 %                         ["\delta_{r} - Ruder (rad)","delta_r"];
 %                         ["\delta_{t} - Throttle (%)","delta_t"];
-%                         ["y_{r}_{dot} - Rate of Change","y_r_dot_{p_{d}}","y_r_dot_{\theta}","y_r_dot_{\chi}","y_r_dot_{\phi}","y_r_dot_{\beta}","y_r_dot_{V_a}"]
+                        ["y_{r}_{dot} - Rate of Change","y_r_dot_{h}"]%,"y_r_dot_{\theta}","y_r_dot_{\chi}","y_r_dot_{\phi}","y_r_dot_{\beta}","y_r_dot_{V_a}"]
 %                         ["h_dot - Rate of Climb (m/s)","y_{h}_{dot}"]
                         };
 
@@ -195,15 +195,43 @@ w_n_V_2 = 1/W_V_2*w_n_theta;
 
 K_theta_DC = param.delta_e_sat_lim.high/e_max_theta*sign(a_theta_3)*a_theta_3/(a_theta_2+param.delta_e_sat_lim.high/e_max_theta*sign(a_theta_3)*a_theta_3);
 
-control.anti_windup = 'derivative'; % 'derivative', 'saturation', 'both', 'none'
+control.anti_windup = 'none'; % 'derivative', 'saturation', 'both', 'none'
 
 switch control.type
     case controllers.OL
-        control.plan = plan;
-        control.x_names = ["p_{n}";"p_{e}";"p_{d}";"u";"v";"w";"\phi";"\theta";"\psi";"p";"q";"r"];
-        control.u_names = ["delta_a";"delta_e";"delta_r";"delta_t"];
-        control.impose_sat = false;
+        % General
+        control.windup_limit = 0;
+        control.sat_lim.high = Inf;
+        control.sat_lim.low = -Inf;
+        control.K.I = 0;
+        
+        % Ailorons
+        control.r_names = "h";
+        control.u_names = "delta_a";
+        control.plan = line;
+        control.t_vec = t;
         core.functions.controllers(1) = controllers(control,core);
+        
+        % Elevator
+        control.r_names = "h";
+        control.u_names = "delta_r";
+        control.plan = line;
+        control.t_vec = t;
+        core.functions.controllers(2) = controllers(control,core);
+        
+        % Rudder
+        control.r_names = "h";
+        control.u_names = "delta_e";
+        control.plan = line;
+        control.t_vec = t;
+        core.functions.controllers(3) = controllers(control,core);
+        
+        % Throttle
+        control.r_names = "h";
+        control.u_names = "delta_t";
+        control.plan = line;
+        control.t_vec = t;
+        core.functions.controllers(4) = controllers(control,core);
     case controllers.PID
         % Course hold
         control.windup_limit = 0.01;
@@ -236,7 +264,7 @@ switch control.type
         core.functions.controllers(2) = controllers(control,core);
 
         % Altitude hold
-        control.windup_limit = 1;
+        control.windup_limit = 0;
         control.sat_lim.high = param.theta_sat_lim.high;
         control.sat_lim.low = param.theta_sat_lim.low;
         control.K.P = 2*zeta_h*w_n_h/(K_theta_DC*param.V_design);

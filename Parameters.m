@@ -111,7 +111,7 @@ param.tail_h = 0.1*scale;
 % Simulation
 settings.start       = 0;      % s
 settings.step        = 0.02;   % s
-settings.end         = 5;     % s
+settings.end         = 10;     % s
 t = settings.start:settings.step:settings.end;
 
 settings.playback_rate  = 1;
@@ -134,13 +134,11 @@ functions.get_tf_coefficents = @get_tf_coefficents;
 function [u,r] = controller_architecture(controllers,y_r,y_r_dot,r,d_hat,t,param)
     % Lateral
     % Saturate
-%     r(1) = min(param.chi_sat_lim.high+chi,r(1));
-%     r(1) = max(param.chi_sat_lim.low+chi,r(1));
     [u(1,1),r] = controllers(1).control(y_r,y_r_dot,r,d_hat,t);
     [u(3,1),r] = controllers(2).control(y_r,y_r_dot,r,d_hat,t);
     
     % Longitudinal
-    if -y_r(3) < param.take_off_alt
+    if y_r(3) < param.take_off_alt
         r(4) = param.take_off_pitch;
         u(2,1) = controllers(3).cascade.control(y_r,y_r_dot,r,d_hat,t);
         u(4,1) = 1;
@@ -151,16 +149,16 @@ function [u,r] = controller_architecture(controllers,y_r,y_r_dot,r,d_hat,t,param
         r_sat(3) = max(y_r(3)+param.h_sat_lim.low,r(3));
         
         % Controller
+%         r_sat(4) = param.x_0(8)+0.1;
         [u(2,1),r_sat] = controllers(3).control(y_r,y_r_dot,r_sat,d_hat,t);
         r(4) = r_sat(4);
         [u(4,1),r] = controllers(4).control(y_r,y_r_dot,r,d_hat,t);
-        
     end
     
-    %u(1,1) = param.u_0(1);
+    u(1,1) = param.u_0(1);
     %u(2,1) = param.u_0(2);
-    %u(3,1) = param.u_0(3);
-    %u(4,1) = param.u_0(4);
+    u(3,1) = param.u_0(3);
+    u(4,1) = param.u_0(4);
 end
 
 % Dynamic Equilibrium Input
