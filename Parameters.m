@@ -76,8 +76,8 @@ param.N.random           = [0.001,0.001,0,0];
 param.N.bias             = [0,0,0,0];
 
 % Wind
-param.W_s = [0;1;-1];
-param.gust_condition = 'moderate';
+param.W_s = [0;0;0];
+param.gust_condition = 'steady';
 param.declination = 2.9*pi/180;
 
 %% Simulation Dimensions
@@ -138,10 +138,10 @@ function u = controller_architecture(controllers,x,r,d_hat,param)
     u(3,1) = controllers(2).control(x,r(5),d_hat);
     
     % Longitudinal
-    if -x(3) < param.take_off_alt
-        u(2,1) = controllers(3).cascade.control(x,param.take_off_pitch,d_hat);
-        u(4,1) = 1;
-    else
+%     if -x(3) < param.take_off_alt
+%         u(2,1) = controllers(3).cascade.control(x,param.take_off_pitch,d_hat);
+%         u(4,1) = 1;
+%     else
         % Saturate
         r(3) = min(param.h_sat_lim.high-x(3),r(3));
         r(3) = max(param.h_sat_lim.low-x(3),r(3));
@@ -149,7 +149,7 @@ function u = controller_architecture(controllers,x,r,d_hat,param)
         % Controller
         u(2,1) = controllers(3).control(x,r(3),d_hat);
         u(4,1) = controllers(4).control(x,r(6),d_hat);
-    end
+%     end
     
     %u(1,1) = param.u_0(1);
     %u(2,1) = param.u_0(2);

@@ -24,6 +24,8 @@ param.trim.gamma = 0*pi/180;
 x_0 = param.x_0;
 x_0(3) = -100;
 [y_r_0,y_r_dot_0] = functions.y_r(x_0,core);
+param.u_0 = [0;-0.1251;0;0.3144];
+param.x_0 = [0;0;-100;24.9686;0;1.2523;0;0.0501;0;0;0;0];
 
 %% Model
 
@@ -189,29 +191,29 @@ settings.loopshaping = false;
 settings.simulate    = true;
 settings.plot_names  = {%["p_{n} - Longitude (m)","p_{n}"];
                         %["p_{e} - Latitude (m)","p_{e}"];
-%                         ["h - Altitude (m)","y_{h}","r_{h}"];
-%                         ["\theta - Pitch (rad)","y_{\theta}","r_{\theta}"];%,"y_{\theta}_{dot}"];
-%                         ["\chi - Course (rad)","y_{\chi}","r_{\chi}"];
-%                         ["\phi - Roll (rad)","y_{\phi}","r_{\phi}"];%,"y_{\phi}_{dot}"];
-%                         ["\beta - Sideslip (rad)","y_{\beta}","r_{\beta}"];
-%                         %["\psi - Yaw (rad)","\psi"]
-%                         ["V_a - Forward Velocity (m/s)","y_{V_a}","r_{V_a}"];
-%                         ["\delta_{a} - Ailorons (rad)","delta_a"];
-%                         ["\delta_{e} - Elevator (rad)","delta_e"];
-%                         ["\delta_{r} - Ruder (rad)","delta_r"];
-%                         ["\delta_{t} - Throttle (rad)","delta_t"];
-%                         ["y_{r}_{dot} - Rate of Change","y_{h}_{dot}","y_{\theta}_{dot}","y_{\chi}_{dot}","y_{\phi}_{dot}","y_{\beta}_{dot}","y_{V_a}_{dot}"]
+                        ["h - Altitude (m)","y_{h}","r_{h}"];
+                        ["\theta - Pitch (rad)","y_{\theta}","r_{\theta}"];%,"y_{\theta}_{dot}"];
+                        ["\chi - Course (rad)","y_{\chi}","r_{\chi}"];
+                        ["\phi - Roll (rad)","y_{\phi}","r_{\phi}"];%,"y_{\phi}_{dot}"];
+                        ["\beta - Sideslip (rad)","y_{\beta}","r_{\beta}"];
+                        %["\psi - Yaw (rad)","\psi"]
+                        ["V_a - Forward Velocity (m/s)","y_{V_a}","r_{V_a}"];
+                        ["\delta_{a} - Ailorons (rad)","delta_a"];
+                        ["\delta_{e} - Elevator (rad)","delta_e"];
+                        ["\delta_{r} - Ruder (rad)","delta_r"];
+                        ["\delta_{t} - Throttle (rad)","delta_t"];
+                        ["y_{r}_{dot} - Rate of Change","y_{h}_{dot}","y_{\theta}_{dot}","y_{\chi}_{dot}","y_{\phi}_{dot}","y_{\beta}_{dot}","y_{V_a}_{dot}"]
                         %["h_dot - Rate of Climb (m/s)","y_{h}_{dot}"]
-                        ["GPS_n - Position north (m)","GPS_n","p_{n}"];
-                        ["GPS_e - Position east (m)","GPS_e","p_{e}"];
-                        ["GPS_h - Altitude (m)","GPS_h","y_{h}"];
-                        ["GPS_Vg - measured horizontal velocity (m/s)","GPS_Vg","u"];
-                        ["GPS_chi - measured course (rad)","GPS_chi","y_{\chi}"];
-                        ["Bar - measured static pressure (altitude) (Pa)","Bar"];
-                        ["Pito - measured dynamic pressure (velocity) (Pa)","Pito"];
-                        ["Comp - measured heading (rad)","Comp","\psi"];
-                        ["Accel - measured acceleration (m/s^2)","Accel_x","Accel_y","Accel_z"];
-                        ["RateGyro - measured rotational rate (rad/s)","RateGyro_p","p","RateGyro_q","q","RateGyro_r","r"]
+%                         ["GPS_n - Position north (m)","GPS_n","p_{n}"];
+%                         ["GPS_e - Position east (m)","GPS_e","p_{e}"];
+%                         ["GPS_h - Altitude (m)","GPS_h","y_{h}"];
+%                         ["GPS_Vg - measured horizontal velocity (m/s)","GPS_Vg","u"];
+%                         ["GPS_chi - measured course (rad)","GPS_chi","y_{\chi}"];
+%                         ["Bar - measured static pressure (altitude) (Pa)","Bar"];
+%                         ["Pito - measured dynamic pressure (velocity) (Pa)","Pito"];
+%                         ["Comp - measured heading (rad)","Comp","\psi"];
+%                         ["Accel - measured acceleration (m/s^2)","Accel_x","Accel_y","Accel_z"];
+%                         ["RateGyro - measured rotational rate (rad/s)","RateGyro_p","p","RateGyro_q","q","RateGyro_r","r"]
                         };
 settings.active_fig  = 2;
 settings.show_hist   = true;
@@ -279,11 +281,45 @@ control.anti_windup = 'derivative'; % 'derivative', 'saturation', 'both', 'none'
 control.windup_limit = 0;
 
 if strcmp(control.controller_type,controllers.OL)
-    control.plan = plan;
-    control.x_names = ["p_{n}";"p_{e}";"p_{d}";"u";"v";"w";"\phi";"\theta";"\psi";"p";"q";"r"];
-    control.u_names = ["delta_a";"delta_e";"delta_r";"delta_t"];
-    control.impose_sat = false;
+    control.windup_limit = 0;
+    control.sat_lim.high = Inf;
+    control.sat_lim.low = -Inf;
+    control.K.I = 0;
+    control.y_r_names = "h";
+    control.u_names = "delta_a";
+    control.plan = line;
+    control.t_vec = t;
     core.functions.controllers(1) = controllers(control,core);
+    
+    control.windup_limit = 0;
+    control.sat_lim.high = Inf;
+    control.sat_lim.low = -Inf;
+    control.K.I = 0;
+    control.y_r_names = "h";
+    control.u_names = "delta_r";
+    control.plan = line;
+    control.t_vec = t;
+    core.functions.controllers(2) = controllers(control,core);
+    
+    control.windup_limit = 0;
+    control.sat_lim.high = Inf;
+    control.sat_lim.low = -Inf;
+    control.K.I = 0;
+    control.y_r_names = "h";
+    control.u_names = "delta_e";
+    control.plan = line;
+    control.t_vec = t;
+    core.functions.controllers(3) = controllers(control,core);
+    
+    control.windup_limit = 0;
+    control.sat_lim.high = Inf;
+    control.sat_lim.low = -Inf;
+    control.K.I = 0;
+    control.y_r_names = "h";
+    control.u_names = "delta_t";
+    control.plan = line;
+    control.t_vec = t;
+    core.functions.controllers(4) = controllers(control,core);
 elseif strcmp(control.controller_type,controllers.PID)
     % Course hold
     control.windup_limit = 0.01;
@@ -296,6 +332,7 @@ elseif strcmp(control.controller_type,controllers.PID)
     control.u_names = "\phi";
     core.functions.controllers(1) = controllers(control,core);
     core.functions.controllers(1).wrapping = true;
+    control.K
     % Roll attitude hold
     control.sat_lim.high = param.delta_a_sat_lim.high;
     control.sat_lim.low = param.delta_a_sat_lim.low;
@@ -305,6 +342,7 @@ elseif strcmp(control.controller_type,controllers.PID)
     control.y_r_names = "\phi";
     control.u_names = "delta_a";
     core.functions.controllers(1).cascade = controllers(control,core);
+    control.K
     % Sideslip mitigation
     control.windup_limit = 0.0001;
     control.sat_lim.high = param.delta_r_sat_lim.high;
@@ -315,6 +353,7 @@ elseif strcmp(control.controller_type,controllers.PID)
     control.y_r_names = "\beta";
     control.u_names = "delta_r";
     core.functions.controllers(2) = controllers(control,core);
+    control.K
     
     % Altitude hold
     control.windup_limit = 1;
@@ -326,6 +365,7 @@ elseif strcmp(control.controller_type,controllers.PID)
     control.y_r_names = "h";
     control.u_names = "\theta";
     core.functions.controllers(3) = controllers(control,core);
+    control.K
     % Ptch attitude hold
     control.sat_lim.high = param.delta_e_sat_lim.high;
     control.sat_lim.low = param.delta_e_sat_lim.low;
@@ -335,6 +375,7 @@ elseif strcmp(control.controller_type,controllers.PID)
     control.y_r_names = "\theta";
     control.u_names = "delta_e";
     core.functions.controllers(3).cascade = controllers(control,core);
+    control.K
     
     % Throttle airspeed hold
     control.windup_limit = 1;
@@ -346,6 +387,7 @@ elseif strcmp(control.controller_type,controllers.PID)
     control.y_r_names = "V_a";
     control.u_names = "delta_t";
     core.functions.controllers(4) = controllers(control,core);
+    control.K
     % Pitch airspeed hold
     control.sat_lim.high = param.delta_t_sat_lim.high;
     control.sat_lim.low = param.delta_t_sat_lim.low;
@@ -355,6 +397,7 @@ elseif strcmp(control.controller_type,controllers.PID)
     control.y_r_names = "V_a";
     control.u_names = "delta_t";
     core.functions.controllers(5) = controllers(control,core);
+    control.K
     
 end
 
