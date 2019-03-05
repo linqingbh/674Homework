@@ -606,6 +606,20 @@ function [a_phi_1,a_phi_2,a_beta_1,a_beta_2,a_theta_1,a_theta_2,a_theta_3,a_V_1,
     a_V_1       = rho*V_a*S_wing/mass*(C_D_0+C_D_alpha*alpha+C_D_delta_e*delta_e) + rho*S_prop/mass*C_prop*V_a;
     a_V_2       = rho*S_prop/mass*C_prop*k_motor^2*delta_t;
     a_V_3       = g;
+    rho
+    V_a
+    c
+    S_wing
+    mass
+    C_D_0
+    C_D_alpha
+    alpha
+    C_D_delta_e
+    delta_e
+    S_prop
+    C_prop
+    k_motor
+    delta_t
 end
 
 
