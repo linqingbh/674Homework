@@ -300,7 +300,7 @@ switch control.type
         control.K.I = w_n_V_2^2/(K_theta_DC*param.g);
         control.K.D = 0;
         control.r_names = "V_a";
-        control.u_names = "delta_t";
+        control.u_names = "delta_e";
         core.functions.controllers(5) = controllers(control,core); 
 end
 
