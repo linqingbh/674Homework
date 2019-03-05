@@ -150,6 +150,9 @@ function [u,r] = controller_architecture(controllers,y_r,y_r_dot,r,d_hat,t,param
         
         % Controller
 %         r_sat(4) = param.x_0(8)+0.1;
+        y_r(3) = 100;
+        y_r_dot(3) = 0;
+        r_sat(3) = 101;
         [u(2,1),r_sat] = controllers(3).control(y_r,y_r_dot,r_sat,d_hat,t);
         r(4) = r_sat(4);
         [u(4,1),r] = controllers(4).control(y_r,y_r_dot,r,d_hat,t);
@@ -606,20 +609,6 @@ function [a_phi_1,a_phi_2,a_beta_1,a_beta_2,a_theta_1,a_theta_2,a_theta_3,a_V_1,
     a_V_1       = rho*V_a*S_wing/mass*(C_D_0+C_D_alpha*alpha+C_D_delta_e*delta_e) + rho*S_prop/mass*C_prop*V_a;
     a_V_2       = rho*S_prop/mass*C_prop*k_motor^2*delta_t;
     a_V_3       = g;
-    rho
-    V_a
-    c
-    S_wing
-    mass
-    C_D_0
-    C_D_alpha
-    alpha
-    C_D_delta_e
-    delta_e
-    S_prop
-    C_prop
-    k_motor
-    delta_t
 end
 
 
