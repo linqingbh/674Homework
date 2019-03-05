@@ -332,7 +332,6 @@ elseif strcmp(control.controller_type,controllers.PID)
     control.u_names = "\phi";
     core.functions.controllers(1) = controllers(control,core);
     core.functions.controllers(1).wrapping = true;
-    control.K
     % Roll attitude hold
     control.sat_lim.high = param.delta_a_sat_lim.high;
     control.sat_lim.low = param.delta_a_sat_lim.low;
@@ -342,7 +341,6 @@ elseif strcmp(control.controller_type,controllers.PID)
     control.y_r_names = "\phi";
     control.u_names = "delta_a";
     core.functions.controllers(1).cascade = controllers(control,core);
-    control.K
     % Sideslip mitigation
     control.windup_limit = 0.0001;
     control.sat_lim.high = param.delta_r_sat_lim.high;
@@ -353,7 +351,6 @@ elseif strcmp(control.controller_type,controllers.PID)
     control.y_r_names = "\beta";
     control.u_names = "delta_r";
     core.functions.controllers(2) = controllers(control,core);
-    control.K
     
     % Altitude hold
     control.windup_limit = 1;
@@ -365,7 +362,6 @@ elseif strcmp(control.controller_type,controllers.PID)
     control.y_r_names = "h";
     control.u_names = "\theta";
     core.functions.controllers(3) = controllers(control,core);
-    control.K
     % Ptch attitude hold
     control.sat_lim.high = param.delta_e_sat_lim.high;
     control.sat_lim.low = param.delta_e_sat_lim.low;
@@ -375,7 +371,6 @@ elseif strcmp(control.controller_type,controllers.PID)
     control.y_r_names = "\theta";
     control.u_names = "delta_e";
     core.functions.controllers(3).cascade = controllers(control,core);
-    control.K
     
     % Throttle airspeed hold
     control.windup_limit = 1;
@@ -387,7 +382,6 @@ elseif strcmp(control.controller_type,controllers.PID)
     control.y_r_names = "V_a";
     control.u_names = "delta_t";
     core.functions.controllers(4) = controllers(control,core);
-    control.K
     % Pitch airspeed hold
     control.sat_lim.high = param.delta_t_sat_lim.high;
     control.sat_lim.low = param.delta_t_sat_lim.low;
@@ -397,7 +391,6 @@ elseif strcmp(control.controller_type,controllers.PID)
     control.y_r_names = "V_a";
     control.u_names = "delta_t";
     core.functions.controllers(5) = controllers(control,core);
-    control.K
     
 end
 
