@@ -117,15 +117,15 @@ classdef dynamics < handle
                 end
 
                 % Measure
-                z = zeros(size(self.param.z_names));
                 z_hat = zeros(size(self.param.z_names));
-                z_filtered = zeros(size(self.param.z_names));
+                z_f = zeros(size(self.param.z_names));
+                z = zeros(size(self.param.z_names));
                 for j = 1:length(self.sensors)
-                    [z_hat(self.sensors(j).z_indexes),z_filtered(self.sensors(j).z_indexes),z(self.sensors(j).z_indexes)] = self.sensors(j).sense(uncertian_state,x_dot,t(i));
+                    [z_hat(self.sensors(j).z_indexes),z_f(self.sensors(j).z_indexes),z(self.sensors(j).z_indexes)] = self.sensors(j).sense(uncertian_state,x_dot,t(i));
                 end
                 
                 % Convert
-                y_m_hat = self.get_y_m(z_filtered,self.param);
+                y_m_hat = self.get_y_m(z_f,self.param);
                 y_m = self.get_y_m(z,self.param);
                 % Observe
                 x_hat = zeros(size(state));
@@ -135,13 +135,15 @@ classdef dynamics < handle
                 end
                 
                 % Convert
-                [y_r_hat,y_r_dot_hat] = self.get_y_r(y_m_hat,x_hat);
-                [y_r,y_r_dot] = self.get_y_r(y_m,self.x);
+                [y_r_hat,y_r_dot_hat] = self.get_y_r(z_f,y_m_hat,x_hat);
+                [y_r,y_r_dot] = self.get_y_r(z,y_m,self.x);
                 % Need to fix d_hat!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
                 
                 % Implimennt controller
                 [self.u,r(:,i)] = self.controller_architecture(self.controllers,y_r_hat,y_r_dot_hat,r(:,i),d_hat(1),t(i),self.param);
-
+%                 self.x
+%                 self.u
+%                 r(:,i)
                 % Save history
                 self.core.publish_specific('r',r(:,i),i);
                 self.core.publish('x',self.x);

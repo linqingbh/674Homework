@@ -128,7 +128,7 @@ classdef controllers < handle
         function [u,r_out] = control(self,y_r_in,y_r_dot_in,r_in,d_hat,t)
             
             % Unpack
-            dt = t - self.t;
+            dt = t - self.t;self.t = t;
             r = r_in(self.r_in_indexes);
             y_r = y_r_in(self.r_in_indexes);
             y_r_dot = y_r_dot_in(self.r_in_indexes);

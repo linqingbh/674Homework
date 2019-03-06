@@ -14,8 +14,8 @@ param.g = 9.81;
 param = aircraft("aerosnode",param);
 
 % System Limits
-param.chi_sat_lim.high = 45*pi/180;
-param.chi_sat_lim.low = -45*pi/180;
+param.chi_sat_lim.high = 15*pi/180;
+param.chi_sat_lim.low = -15*pi/180;
 
 param.phi_sat_lim.high = 45*pi/180;
 param.phi_sat_lim.low = -45*pi/180;
@@ -83,7 +83,7 @@ gust = wind.steady;
 param.wind = wind(gust,base,param.V_design);
 
 % Magnetic
-param.declination = 3.97*pi/180;
+param.declination = 2.9*pi/180;
 
 %% Simulation Dimensions
 
@@ -111,7 +111,7 @@ param.tail_h = 0.1*scale;
 % Simulation
 settings.start       = 0;      % s
 settings.step        = 0.02;   % s
-settings.end         = 10;     % s
+settings.end         = 100;     % s
 t = settings.start:settings.step:settings.end;
 
 settings.playback_rate  = 1;
@@ -132,36 +132,43 @@ functions.get_tf_coefficents = @get_tf_coefficents;
 
 % Controller
 function [u,r] = controller_architecture(controllers,y_r,y_r_dot,r,d_hat,t,param)
+    % Saturate
+    r_sat = r;
+    chi_error = controllers.get_error(y_r(1),r_sat(1),true);
+    if chi_error > param.chi_sat_lim.high
+        r_sat(1) = y_r(1)+param.chi_sat_lim.high;
+    elseif chi_error < param.chi_sat_lim.low
+        r_sat(1) = y_r(1)+param.chi_sat_lim.low;
+    end
+    
+
     % Lateral
     % Saturate
-    [u(1,1),r] = controllers(1).control(y_r,y_r_dot,r,d_hat,t);
+    [u(1,1),r_sat] = controllers(1).control(y_r,y_r_dot,r_sat,d_hat,t);
+    r(2) = r_sat(2);
     [u(3,1),r] = controllers(2).control(y_r,y_r_dot,r,d_hat,t);
     
     % Longitudinal
-    if y_r(3) < param.take_off_alt
-        r(4) = param.take_off_pitch;
-        u(2,1) = controllers(3).cascade.control(y_r,y_r_dot,r,d_hat,t);
-        u(4,1) = 1;
-    else
+%     if y_r(3) < param.take_off_alt
+%         r(4) = param.take_off_pitch;
+%         u(2,1) = controllers(3).cascade.control(y_r,y_r_dot,r,d_hat,t);
+%         u(4,1) = 1;
+%     else
         % Saturate
         r_sat = r;
-        r_sat(3) = min(y_r(3)+param.h_sat_lim.high,r(3));
-        r_sat(3) = max(y_r(3)+param.h_sat_lim.low,r(3));
+        r_sat(3) = min(param.h_sat_lim.high+y_r(3),r_sat(3));
+        r_sat(3) = max(param.h_sat_lim.low+y_r(3),r_sat(3));
         
         % Controller
-%         r_sat(4) = param.x_0(8)+0.1;
-        y_r(3) = 100;
-        y_r_dot(3) = 0;
-        r_sat(3) = 101;
         [u(2,1),r_sat] = controllers(3).control(y_r,y_r_dot,r_sat,d_hat,t);
         r(4) = r_sat(4);
         [u(4,1),r] = controllers(4).control(y_r,y_r_dot,r,d_hat,t);
-    end
+%     end
     
-    u(1,1) = param.u_0(1);
-    %u(2,1) = param.u_0(2);
-    u(3,1) = param.u_0(3);
-    u(4,1) = param.u_0(4);
+%     u(1,1) = param.u_0(1);
+%     u(2,1) = param.u_0(2);
+%     u(3,1) = param.u_0(3);
+%     u(4,1) = param.u_0(4);
 end
 
 % Dynamic Equilibrium Input
@@ -227,6 +234,8 @@ function x_dot = eqs_motion(t,x,input,param)
     delta_e = input(2);
     delta_r = input(3);
     delta_t = input(4);
+    % Aircraft parameters
+    my_unpack(param)
     % Trig
     S_phi = sin(phi);
     C_phi = cos(phi);
@@ -241,8 +250,6 @@ function x_dot = eqs_motion(t,x,input,param)
     V_w_b = R_vb*W_s+W_g; % Wind in the inertial NED frame 
     air  = atmosphere(-p_d);
     rho = air.rho;
-    % Aircraft parameters
-    my_unpack(param)
     
     % Wind Triangle
     V_g_b = [u;v;w];
@@ -426,20 +433,20 @@ function [points,colors,history] = get_drawing(x,~,param)
 end
 
 % y_r Conversion
-function [y_r_out,y_r_dot_out] = get_y_r(y_m,x_hat)
-    V_w_b = [0;0;0];%y_m(13:15);
-    V_a_b_dot = 0; % assume unaccelorated flight. Needs updating!!!!
+function [y_r_out,y_r_dot_out] = get_y_r(z,y_m,x)
+    V_w_b = [0;0;0];%y_m(13:15); % Assume No wind
+    V_a_b_dot = z(9:11); % By no wind assumption
 
-    p_d = x_hat(3);
-    u = x_hat(4);
-    v = x_hat(5);
-    w = x_hat(6);
-    phi = x_hat(7);
-    theta = x_hat(8);
-    psi = x_hat(9);
-    p = x_hat(10);
-    q = x_hat(11);
-    r = x_hat(12);
+    p_d = x(3);
+    u = x(4);
+    v = x(5);
+    w = x(6);
+    phi = x(7);
+    theta = x(8);
+    psi = x(9);
+    p = x(10);
+    q = x(11);
+    r = x(12);
 
     R_bv = get_rotation(phi,theta,psi,'b->v');
     V_g_g = R_bv*[u;v;w];
@@ -450,14 +457,14 @@ function [y_r_out,y_r_dot_out] = get_y_r(y_m,x_hat)
     u_a = V_a_b(1);
     v_a = V_a_b(2);
     w_a = V_a_b(3);
-    u_a_dot = 0; % Assume unaccelorated flight: this only affects beta_dot. Needs updating!!!!! 
-    v_a_dot = 0;
-    w_a_dot = 0;
+    u_a_dot = V_a_b_dot(1);
+    v_a_dot = V_a_b_dot(2);
+    w_a_dot = V_a_b_dot(3);
     V_a = sqrt(sum(V_a_b.^2));
     V_a_dot = sqrt(sum(V_a_b_dot.^2));
     beta = atan2(v_a,sqrt(u_a^2+w_a^2));
     chi = atan2(V_g_g(2),V_g_g(1));%y_m(11);
-    beta_dot = 0;%1/(v_a^2/(u_a^2+w_a^2)+1)*(v_a_dot/sqrt(u_a^2+w_a^2)-v_a*(u_a*u_a_dot+w_a*w_a_dot)/(u_a^2+w_a^2)^(3/2));
+    beta_dot = 1/(v_a^2/(u_a^2+w_a^2)+1)*(v_a_dot/sqrt(u_a^2+w_a^2)-v_a*(u_a*u_a_dot+w_a*w_a_dot)/(u_a^2+w_a^2)^(3/2));
     
     rotational_velocity = [1,sin(phi)*tan(theta),cos(phi)*tan(theta);
                            0,cos(phi),-sin(phi);
@@ -482,24 +489,24 @@ function [y_r_out,y_r_dot_out] = get_y_r(y_m,x_hat)
 end
 
 % y_m Conversion
-function y_m = get_y_m(sensor_data,param)
-    p_n=sensor_data(1);
-    p_e=sensor_data(2);
-    h_gps=sensor_data(3);
-    V_gh=sensor_data(4);
-    chi=sensor_data(5);
-    P_static=sensor_data(6);
-    P_dynamic=sensor_data(7);
-    psi=sensor_data(8);
-    a_x=sensor_data(9);
-    a_y=sensor_data(10);
-    a_z=sensor_data(11);
-    p=sensor_data(12);
-    q=sensor_data(13);
-    r=sensor_data(14);
-    u = sensor_data(15);
-    v = sensor_data(16);
-    w = sensor_data(17);
+function y_m = get_y_m(z_f,param)
+    p_n=z_f(1);
+    p_e=z_f(2);
+    h_gps=z_f(3);
+    V_gh=z_f(4);
+    chi=z_f(5);
+    P_static=z_f(6);
+    P_dynamic=z_f(7);
+    psi=z_f(8);
+    a_x=z_f(9);
+    a_y=z_f(10);
+    a_z=z_f(11);
+    p=z_f(12);
+    q=z_f(13);
+    r=z_f(14);
+    u = z_f(15);
+    v = z_f(16);
+    w = z_f(17);
     
     g = param.g;
     

@@ -17,6 +17,12 @@ param.trim.R = Inf;
 param.trim.gamma = 0*pi/180;
 param.trim.h_0 = 100;
 [param.u_0,param.x_0,param.y_r_0] = functions.get_equilibrium('throw',param,functions);
+% param.x_0 = [0.2;0.2;0.2;0.2;0.2;0.2;0.2;0.2;0.2;0.2;0.2;0.2];
+% param.u_0 = [0.2;0.2;0.2;0.2];
+% param.y_r_0 = functions.get_y_r([0;0;0;0;0;0;0;0;0;0;0;0;0;0;0;0;0],[],param.x_0);
+param.x_0 = [0;0;-100;24.9686;0;1.2523;0;0.0501;0;0;0;0];
+param.u_0 = [0;-0.12510;0;0.3144];
+param.y_r_0 = functions.get_y_r([0;0;0;0;0;0;0;0;0;0;0;0;0;0;0;0;0],[],param.x_0);
 y_m_0 = [param.x_0(1:3);param.trim.V_a;param.x_0(7:12);param.x_0(9);param.trim.V_a;0;0;0];
 
 x_0s = zeros(size(param.x_names));
@@ -53,7 +59,7 @@ r = [square1*pi;line;square2*50+100;line;line;square3*10+param.trim.V_a];
 %% Simulation Parameters
 settings.active_fig  = 1;
 settings.show_hist   = true;
-settings.animation   = false;
+settings.animation   = true;
 settings.plot        = true;
 settings.simulate    = true;
 settings.plot_names  = {%["p_{n} - Longitude (m)","p_{n}"];
@@ -62,14 +68,14 @@ settings.plot_names  = {%["p_{n} - Longitude (m)","p_{n}"];
                         ["\theta - Pitch (rad)","y_r_{\theta}","r_{\theta}"];%,"y_{\theta}_{dot}"];
                         ["\chi - Course (rad)","y_r_{\chi}","r_{\chi}"];
                         ["\phi - Roll (rad)","y_r_{\phi}","r_{\phi}"];%,"y_{\phi}_{dot}"];
-%                         ["\beta - Sideslip (rad)","y_r_{\beta}","r_{\beta}"]
-%                         ["\psi - Yaw (rad)","\psi"]
+                        ["\beta - Sideslip (rad)","y_r_{\beta}","r_{\beta}"]
+                        ["\psi - Yaw (rad)","\psi"]
 %                         ["V_a - Forward Velocity (m/s)","y_r_{V_a}","r_{V_a}"];
 %                         ["\delta_{a} - Ailorons (rad)","delta_a"];
 %                         ["\delta_{e} - Elevator (rad)","delta_e"];
 %                         ["\delta_{r} - Ruder (rad)","delta_r"];
 %                         ["\delta_{t} - Throttle (%)","delta_t"];
-                        ["y_{r}_{dot} - Rate of Change","y_r_dot_{h}"]%,"y_r_dot_{\theta}","y_r_dot_{\chi}","y_r_dot_{\phi}","y_r_dot_{\beta}","y_r_dot_{V_a}"]
+%                         ["y_{r}_{dot} - Rate of Change","y_r_dot_{h}"]%,"y_r_dot_{\theta}","y_r_dot_{\chi}","y_r_dot_{\phi}","y_r_dot_{\beta}","y_r_dot_{V_a}"]
 %                         ["h_dot - Rate of Climb (m/s)","y_{h}_{dot}"]
                         };
 
@@ -95,7 +101,7 @@ core.publish("y_r",param.y_r_0)
 core.publish("y_r_hat",r_0s)
 core.publish("y_r_dot",r_0s)
 core.publish("y_r_dot_hat",r_0s)
-core.publish("u",u_0s)
+core.publish("u",param.u_0)
 core.settings = settings;
 core.param = param;
 core.functions = functions;
@@ -264,7 +270,7 @@ switch control.type
         core.functions.controllers(2) = controllers(control,core);
 
         % Altitude hold
-        control.windup_limit = 0;
+        control.windup_limit = 1;
         control.sat_lim.high = param.theta_sat_lim.high;
         control.sat_lim.low = param.theta_sat_lim.low;
         control.K.P = 2*zeta_h*w_n_h/(K_theta_DC*param.V_design);
