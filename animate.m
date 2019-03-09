@@ -229,7 +229,6 @@ classdef animate < handle
             
             % Get time
             [x,data,t] = self.get_data();
-            
             if self.animation
                 
                 time_watch = tic; % Timer that iterates through each image

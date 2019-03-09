@@ -14,6 +14,9 @@ function vector_rotated = get_rotation(phi,theta,psi,type,vector)
     R_NED_ENU = [0,1,0;
                  1,0,0;
                  0,0,-1];
+    R_bv12 = [1,sin(phi)*tan(theta),cos(phi)*tan(theta);
+              0,cos(phi),-sin(phi);
+              0,sin(phi)*sec(theta),cos(phi)*sec(theta)];
     switch type
         case 'b->b'
             R = I;
@@ -51,6 +54,10 @@ function vector_rotated = get_rotation(phi,theta,psi,type,vector)
             R = R_NED_ENU;
         case 'ENU->NED'
             R = R_NED_ENU.';
+        case 'v12->b'
+            R = R_bv12.';
+        case 'b->v12'
+            R = R_bv12;
     end
     
     vector_rotated = R*vector;

@@ -17,12 +17,6 @@ param.trim.R = Inf;
 param.trim.gamma = 0*pi/180;
 param.trim.h_0 = 100;
 [param.u_0,param.x_0,param.y_r_0] = functions.get_equilibrium('throw',param,functions);
-% param.x_0 = [0.2;0.2;0.2;0.2;0.2;0.2;0.2;0.2;0.2;0.2;0.2;0.2];
-% param.u_0 = [0.2;0.2;0.2;0.2];
-% param.y_r_0 = functions.get_y_r([0;0;0;0;0;0;0;0;0;0;0;0;0;0;0;0;0],[],param.x_0);
-param.x_0 = [0;0;-100;24.9686;0;1.2523;0;0.0501;0;0;0;0];
-param.u_0 = [0;-0.12510;0;0.3144];
-param.y_r_0 = functions.get_y_r([0;0;0;0;0;0;0;0;0;0;0;0;0;0;0;0;0],[],param.x_0);
 y_m_0 = [param.x_0(1:3);param.trim.V_a;param.x_0(7:12);param.x_0(9);param.trim.V_a;0;0;0];
 
 x_0s = zeros(size(param.x_names));
@@ -33,7 +27,7 @@ u_0s = zeros(size(param.u_names));
 
 %% Model
 assumed_param = param;
-assumed_param.wind = wind(wind.steady,[0;0;0],param.trim.V_a);
+assumed_param.wind = wind(wind.steady,[0;0;0]);
 [param.A,param.B] = get_linear_model(functions.eqs_motion,assumed_param);
 
 %% Input Parameters
@@ -69,7 +63,7 @@ settings.plot_names  = {%["p_{n} - Longitude (m)","p_{n}"];
                         ["\chi - Course (rad)","y_r_{\chi}","r_{\chi}"];
                         ["\phi - Roll (rad)","y_r_{\phi}","r_{\phi}"];%,"y_{\phi}_{dot}"];
                         ["\beta - Sideslip (rad)","y_r_{\beta}","r_{\beta}"]
-                        ["\psi - Yaw (rad)","\psi"]
+                        ["delta_e - Elevator (rad)","delta_e"]
 %                         ["V_a - Forward Velocity (m/s)","y_r_{V_a}","r_{V_a}"];
 %                         ["\delta_{a} - Ailorons (rad)","delta_a"];
 %                         ["\delta_{e} - Elevator (rad)","delta_e"];
@@ -150,13 +144,8 @@ sense.x_names = "\psi";
 sense.z_names = "Comp";
 core.functions.sensors(4) = sensors(sense,param);
 
-% sense.type = sensors.Accel;
-% sense.x_names = ["u","v","w","\phi","\theta","p","q","r"];
-% sense.z_names = ["Accel_x";"Accel_y";"Accel_z"];
-% core.functions.sensors(5) = sensors(sense,param);
-
-sense.type = sensors.Exact;
-sense.x_names = ["\phi","\theta","\psi"];
+sense.type = sensors.Accel;
+sense.x_names = ["u","v","w","\phi","\theta","p","q","r"];
 sense.z_names = ["Accel_x";"Accel_y";"Accel_z"];
 core.functions.sensors(5) = sensors(sense,param);
 
@@ -165,18 +154,13 @@ sense.x_names = ["p","q","r"];
 sense.z_names = ["RateGyro_p";"RateGyro_q";"RateGyro_r"];
 core.functions.sensors(6) = sensors(sense,param);
 
-sense.type = sensors.Exact;
-sense.x_names = ["u","v","w"];
-sense.z_names = ["u";"v";"w"];
-core.functions.sensors(7) = sensors(sense,param);
-
 %% Observers
 observe.L.sigma = 0.05;
 observe.r_names = [];
 observe.u_names = [];
 
 observe.type = observers.exact;
-observe.m_names = ["p_{n}";"p_{e}";"p_{d}";"u_w";"v_w";"w_w";"\phi";"\theta";"\psi";"p";"q";"r"];
+observe.m_names = [];
 observe.x_names = ["p_{n}";"p_{e}";"p_{d}";"u";"v";"w";"\phi";"\theta";"\psi";"p";"q";"r"];
 core.functions.observers(1) = observers(observe,core);
 
@@ -273,8 +257,8 @@ switch control.type
         control.windup_limit = 1;
         control.sat_lim.high = param.theta_sat_lim.high;
         control.sat_lim.low = param.theta_sat_lim.low;
-        control.K.P = 2*zeta_h*w_n_h/(K_theta_DC*param.V_design);
-        control.K.I = w_n_h^2/(K_theta_DC*param.V_design);
+        control.K.P = 2*zeta_h*w_n_h/(K_theta_DC*param.aircraft.V_design);
+        control.K.I = w_n_h^2/(K_theta_DC*param.aircraft.V_design);
         control.K.D = 0;
         control.r_names = "h";
         control.u_names = "\theta";

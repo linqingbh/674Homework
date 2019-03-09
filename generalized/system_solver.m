@@ -33,17 +33,18 @@ classdef system_solver < handle
             self.I = eye(length(self.x));
         end
         
-        function [y,x] = propigate(self,u,t)
+        function [y,x,x_dot] = propigate(self,u,t)
             if isempty(t)
                 dt = self.time;
             else
                 dt = t - self.time;
             end
-            y = self.C*self.x + self.D*u;
             ode = @(t,x) self.A*x+self.B*u;
-            x = self.solver(ode,[0,dt],self.x);
-            x = x(end);
-            self.x(end) = x;
+            [x,x_dot] = self.solver(ode,[0,dt],self.x);
+            y = self.C*x + self.D*u;
+            x = x(:,end);
+            x_dot = x_dot(:,end);
+            self.x = x;
         end
     end
 end

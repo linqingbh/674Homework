@@ -89,6 +89,7 @@ classdef dynamics < handle
             % Runga Kuta
             [self.x,new_state_dot] = rk4(@(t,state) self.eqs_motion(t,state,actual_u,self.param),[0,dt],self.x,true);
             
+            
             % Impliment uncertainty
             if self.implement_uncertainty
                 new_state = uncertainty(self.x,self.D_out,self.uncertian_x);
@@ -108,7 +109,7 @@ classdef dynamics < handle
                 dt = t(i) - t(i-1);
                 
                 [state,x_dot] = self.propagate(dt);
-                
+
                 % Impliment uncertianty
                 if self.implement_uncertainty
                     uncertian_state = uncertainty(state,self.N,self.uncertian_N);
@@ -131,26 +132,24 @@ classdef dynamics < handle
                 x_hat = zeros(size(state));
                 d_hat = zeros(size(r(:,i)));
                 for j = 1:length(self.observers)
-                    [x_hat(self.observers(j).x_indexes),d_hat(self.observers(j).r_indexes)] = self.observers(j).observe(y_m_hat,r(:,i),self.u,t(i));
+                    [x_hat(self.observers(j).x_indexes),d_hat(self.observers(j).r_indexes)] = self.observers(j).observe(self.x,y_m_hat,r(:,i),self.u,t(i));
                 end
                 
                 % Convert
-                [y_r_hat,y_r_dot_hat] = self.get_y_r(z_f,y_m_hat,x_hat);
-                [y_r,y_r_dot] = self.get_y_r(z,y_m,self.x);
+                [y_r_hat,y_r_dot_hat] = self.get_y_r(z_f,x_hat,self.param);
+                [y_r,y_r_dot] = self.get_y_r(z,self.x,self.param);
                 % Need to fix d_hat!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
                 
                 % Implimennt controller
                 [self.u,r(:,i)] = self.controller_architecture(self.controllers,y_r_hat,y_r_dot_hat,r(:,i),d_hat(1),t(i),self.param);
-%                 self.x
-%                 self.u
-%                 r(:,i)
+
                 % Save history
                 self.core.publish_specific('r',r(:,i),i);
                 self.core.publish('x',self.x);
                 self.core.publish('x_dot',x_dot);
                 self.core.publish('z',z);
                 self.core.publish('z_hat',z_hat);
-                self.core.publish('y_m',y_m_hat);
+                self.core.publish('y_m',y_m);
                 self.core.publish('y_m_hat',y_m_hat);
                 self.core.publish('x_hat',x_hat);
                 self.core.publish('d_hat',d_hat);
@@ -160,9 +159,6 @@ classdef dynamics < handle
                 self.core.publish('y_r_dot_hat',y_r_dot_hat);
                 self.core.publish('u',self.u);
             end
-            
-            
         end
     end
 end
-

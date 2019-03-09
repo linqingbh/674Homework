@@ -29,6 +29,7 @@ classdef observers < handle
     end
     
     properties (Constant)
+        pass = 'pass measured values'
         exact = 'Exact'
         luenberger = 'Luenberger Observer'
         de = 'Dirivative based on error'
@@ -89,31 +90,33 @@ classdef observers < handle
         end
         
         % Main ------------------------------------------------------------
-        function [x_hat,d_hat] = observe(self,y_m,r,u,t)
+        function [x_hat,d_hat] = observe(self,x,y_m_hat,r,u,t)
             
             % Unpack
             dt = t - self.t;
-            y_m = y_m(self.m_indexes);
+            y_m_hat = y_m_hat(self.m_indexes);
             r = r(self.r_indexes);
             u = u(self.u_indexes);
             
             % Obtain measurment
             switch self.type
+                case self.pass
+                    x_hat = y_m_hat;
                 case self.exact
-                    x_hat = y_m;
+                    x_hat = x(self.x_indexes);
                 case self.luenberger
-                    x_hat = rk4(@(time,state) self.observer_eqs(time,state,y_m,u),[0,dt],self.x_hat,true);
-                    self.d_hat = rk4(@(time,state) self.dist_eqs(time,state,self.x_hat,y_m),[0,dt],self.d_hat,true);
+                    x_hat = rk4(@(time,state) self.observer_eqs(time,state,y_m_hat,u),[0,dt],self.x_hat,true);
+                    self.d_hat = rk4(@(time,state) self.dist_eqs(time,state,self.x_hat,y_m_hat),[0,dt],self.d_hat,true);
                 case self.de
-                    error = control.get_error(y_m,r,self.m_is_angle);
+                    error = control.get_error(y_m_hat,r,self.m_is_angle);
                     beta = (2.*self.L.sigma - dt)./(2.*self.L.sigma + dt);
                     self.velocity = dirty_direvative(self,error,beta,dt);
-                    self.position = y_m;
+                    self.position = y_m_hat;
                     x_hat = -self.velocity;
                 case self.dy
                     beta = (2.*self.L.sigma - dt)./(2.*self.L.sigma + dt);
-                    self.velocity = dirty_direvative(self,y_m,beta,dt);
-                    self.position = y_m;
+                    self.velocity = dirty_direvative(self,y_m_hat,beta,dt);
+                    self.position = y_m_hat;
                     x_hat = self.velocity;
             end
                 

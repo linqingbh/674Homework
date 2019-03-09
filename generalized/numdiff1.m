@@ -1,6 +1,6 @@
 function df_dx = numdiff1(f,x,epsilon)
 
-    if isempty('epsilon'),epsilon = 0.01;end
+    if ~exist('epsilon','var'),epsilon = 0.01;end
     
     index = find(epsilon);
     while 1

@@ -1,7 +1,6 @@
 %% Header
 % This is the master function which handles the simulation
 
-
 %% Simulation
 if settings.simulate
     % Object simulating the system

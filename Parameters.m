@@ -42,9 +42,9 @@ param.take_off_alt = 10;
 param.take_off_pitch = 15*pi/180;
 
 % State Description
-param.x_names = ["p_{n}";"p_{e}";"p_{d}";"u";"v";"w";"\phi";"\theta";"\psi";"p";"q";"r"];
-param.z_names = ["GPS_n";"GPS_e";"GPS_h";"GPS_Vg";"GPS_chi";"Bar";"Pito";"Comp";"Accel_x";"Accel_y";"Accel_z";"RateGyro_p";"RateGyro_q";"RateGyro_r";"u";"v";"w"];
-param.m_names = ["p_{n}";"p_{e}";"p_{d}";"u_a";"\phi";"\theta";"\psi";"p";"q";"r";"\chi";"V_gh";"u_w";"v_w";"w_w"];
+param.x_names = ["p_{n}";"p_{e}";"p_{d}";"u";"v";"w";"\phi";"\theta";"\psi";"p";"q";"r";"w_n";"w_e";"w_d";"w_n_dot";"w_e_dot";"w_d_dot"];
+param.z_names = ["GPS_n";"GPS_e";"GPS_h";"GPS_Vg";"GPS_chi";"Bar";"Pito";"Comp";"Accel_x";"Accel_y";"Accel_z";"RateGyro_p";"RateGyro_q";"RateGyro_r"];
+param.m_names = ["p_{n}";"p_{e}";"p_{d}";"u_a";"\phi";"\theta";"\psi";"p";"q";"r";"\chi";"V_gh";"w_n";"w_e";"w_d"];
 param.r_names = ["\chi";"\phi";"h";"\theta";"\beta";"V_a"];
 param.u_names = ["delta_a";"delta_e";"delta_r";"delta_t"];
 
@@ -78,9 +78,9 @@ param.N.random           = [0.001,0.001,0,0];
 param.N.bias             = [0,0,0,0];
 
 % Wind
-base = [0;0;0]; % NEU
+base = [0;0;0];
 gust = wind.steady;
-param.wind = wind(gust,base,param.V_design);
+param.wind = wind(gust,base);
 
 % Magnetic
 param.declination = 2.9*pi/180;
@@ -111,7 +111,7 @@ param.tail_h = 0.1*scale;
 % Simulation
 settings.start       = 0;      % s
 settings.step        = 0.02;   % s
-settings.end         = 100;     % s
+settings.end         = 20;     % s
 t = settings.start:settings.step:settings.end;
 
 settings.playback_rate  = 1;
@@ -188,7 +188,8 @@ function [u,x,y_r] = get_equilibrium(~,param,functions)
         initial = [0;0;0];
         
         % Wind
-        param.wind = wind(wind.steady,[0;0;0],param.trim.V_a);
+        base = param.wind.base;
+        param.wind = wind(wind.steady,[0;0;0]);
         
         
         % function to trim
@@ -205,6 +206,7 @@ function [u,x,y_r] = get_equilibrium(~,param,functions)
 
         x = get_x_star(output,V_a,R,gamma);
         x(3) = -param.trim.h_0;
+        x(13:15) = base;
 
         u = get_u_star(output,V_a,R,gamma,param);
         
@@ -229,13 +231,15 @@ function x_dot = eqs_motion(t,x,input,param)
     p       = x(10);
     q       = x(11);
     r       = x(12);
+    V_w_g   = x(13:15);
+    A_w_g   = x(16:18);
     % Input
     delta_a = input(1);
     delta_e = input(2);
     delta_r = input(3);
     delta_t = input(4);
     % Aircraft parameters
-    my_unpack(param)
+    my_unpack(param.aircraft)
     % Trig
     S_phi = sin(phi);
     C_phi = cos(phi);
@@ -245,13 +249,10 @@ function x_dot = eqs_motion(t,x,input,param)
     C_psi = cos(psi);
     % Rotations
     R_vb = get_rotation(phi,theta,psi,'v->b');
-    % Air
-    [W_s,W_g] = param.wind.get(t);
-    V_w_b = R_vb*W_s+W_g; % Wind in the inertial NED frame 
-    air  = atmosphere(-p_d);
-    rho = air.rho;
-    
+    R_v12b = get_rotation(phi,theta,psi,'v12->b');
+    R_bv12 = get_rotation(phi,theta,psi,'v12->b');
     % Wind Triangle
+     V_w_b = R_vb*V_w_g;
     V_g_b = [u;v;w];
     V_a_b = V_g_b - V_w_b;
     u_a = V_a_b(1);
@@ -260,6 +261,13 @@ function x_dot = eqs_motion(t,x,input,param)
     alpha = atan2(w_a,u_a);
     V_a = sqrt(u_a^2+v_a^2+w_a^2);
     beta = atan2(v_a,sqrt(u_a^2+w_a^2));
+    % Air
+    A_w_b = R_vb*A_w_g;
+    [V_w_b_dot,V_w_b_ddot] = param.wind.get(V_w_b,A_w_b,V_a,t);
+    air  = atmosphere(-p_d);
+    rho = air.rho;
+
+    
 
     % Drag and Lift Coeficents
     sigma = (1+exp(-M*(alpha-alpha_0))+exp(M*(alpha+alpha_0)))/((1+exp(-M*(alpha-alpha_0)))*(1+exp(M*(alpha+alpha_0))));
@@ -275,9 +283,9 @@ function x_dot = eqs_motion(t,x,input,param)
     C_Z_delta_e = -C_D_delta_e*sin(alpha)-C_L_delta_e*cos(alpha);
     
     % Equation Matrices
-    Gravity = [-mass*g*sin(theta);
-               mass*g*cos(theta)*sin(phi);
-               mass*g*cos(theta)*cos(phi)];
+    Gravity = [-mass*param.g*S_theta;
+               mass*param.g*C_theta*S_phi;
+               mass*param.g*C_theta*cos(phi)];
            
     Aerodynamics = 1/2*rho*V_a*S_wing*[C_X*V_a+C_X_q*c/2*q;
                                     C_Y_0*V_a+C_Y_beta*beta*V_a+C_Y_p*b/2*p+C_Y_r*b/2*r;
@@ -325,14 +333,11 @@ function x_dot = eqs_motion(t,x,input,param)
     Acceleration            = [r*v-q*w;
                                p*w-r*u;
                                q*u-p*v];
-    Angular_Velocity        = [1,S_phi*tan(theta),C_phi*tan(theta);
-                               0,C_phi,-S_phi;
-                               0,S_phi/C_theta,C_phi/C_theta];
+    Angular_Velocity        = R_v12b;
     Angular_Acceleration    = [Gamma(1)*p*q-Gamma(2)*q*r,Gamma(3)*l+Gamma(4)*n;
                                Gamma(5)*p*r-Gamma(6)*(p^2-r^2),1/Jy*m;
                                Gamma(7)*p*q-Gamma(1)*q*r,Gamma(4)*l+Gamma(8)*n];
                                
-
     % Initialize
     x_dot = zeros(length(x),1);
 
@@ -341,6 +346,18 @@ function x_dot = eqs_motion(t,x,input,param)
     x_dot(4:6)   = Acceleration+1/mass*[fx;fy;fz];
     x_dot(7:9)   = Angular_Velocity*x(10:12);
     x_dot(10:12) = sum(Angular_Acceleration,2);
+    
+    % -----------------------------------------
+    % Wind
+    omega_ddot = R_bv12*x_dot(10:12);
+    
+    x_dot(13) = C_psi*C_theta*V_w_b_dot(1) - C_phi*S_psi*V_w_b_dot(2) + S_phi*S_psi*V_w_b_dot(3) - C_phi*C_psi*V_w_b(2)*x_dot(9) + C_phi*S_psi*V_w_b(3)*x_dot(7) + C_psi*S_phi*V_w_b(3)*x_dot(9) - C_theta*S_psi*V_w_b(1)*x_dot(9) - C_psi*S_theta*V_w_b(1)*x_dot(8) + S_phi*S_psi*V_w_b(2)*x_dot(7) + C_phi*C_psi*S_theta*V_w_b_dot(3) + C_psi*S_phi*S_theta*V_w_b_dot(2) + C_phi*C_psi*C_theta*V_w_b(3)*x_dot(8) + C_phi*C_psi*S_theta*V_w_b(2)*x_dot(7) + C_psi*C_theta*S_phi*V_w_b(2)*x_dot(8) - C_psi*S_phi*S_theta*V_w_b(3)*x_dot(7) - C_phi*S_psi*S_theta*V_w_b(3)*x_dot(9) - S_phi*S_psi*S_theta*V_w_b(2)*x_dot(9);
+    x_dot(14) = C_psi*S_phi*V_w_b_dot(3) - C_phi*C_psi*V_w_b_dot(2) + C_theta*S_psi*V_w_b_dot(1) + S_phi*S_psi*S_theta*V_w_b_dot(2) + C_phi*C_psi*V_w_b(3)*x_dot(7) + C_psi*C_theta*V_w_b(1)*x_dot(9) + C_psi*S_phi*V_w_b(2)*x_dot(7) + C_phi*S_psi*V_w_b(2)*x_dot(9) - S_phi*S_psi*V_w_b(3)*x_dot(9) - S_psi*S_theta*V_w_b(1)*x_dot(8) + C_phi*S_psi*S_theta*V_w_b_dot(3) + C_phi*C_psi*S_theta*V_w_b(3)*x_dot(9) + C_phi*C_theta*S_psi*V_w_b(3)*x_dot(8) + C_phi*S_psi*S_theta*V_w_b(2)*x_dot(7) + C_psi*S_phi*S_theta*V_w_b(2)*x_dot(9) + C_theta*S_phi*S_psi*V_w_b(2)*x_dot(8) - S_phi*S_psi*S_theta*V_w_b(3)*x_dot(7);
+    x_dot(15) = C_phi*C_theta*V_w_b_dot(3) - C_theta*V_w_b(1)*x_dot(8) - S_theta*V_w_b_dot(1) + C_theta*S_phi*V_w_b_dot(2) + C_phi*C_theta*V_w_b(2)*x_dot(7) - C_theta*S_phi*V_w_b(3)*x_dot(7) - C_phi*S_theta*V_w_b(3)*x_dot(8) - S_phi*S_theta*V_w_b(2)*x_dot(8);
+    x_dot(16) = C_psi*C_theta*V_w_b_ddot(1) - C_phi*S_psi*V_w_b_ddot(2) + S_phi*S_psi*V_w_b_ddot(3) - C_psi*S_theta*V_w_b(1)*omega_ddot(2) + S_phi*S_psi*V_w_b(2)*omega_ddot(1) - 2*C_phi*C_psi*V_w_b_dot(2)*x_dot(9) + 2*C_phi*S_psi*V_w_b_dot(3)*x_dot(7) + 2*C_psi*S_phi*V_w_b_dot(3)*x_dot(9) - 2*C_theta*S_psi*V_w_b_dot(1)*x_dot(9) + C_phi*C_psi*S_theta*V_w_b_ddot(3) - 2*C_psi*S_theta*V_w_b_dot(1)*x_dot(8) + 2*S_phi*S_psi*V_w_b_dot(2)*x_dot(7) + C_psi*S_phi*S_theta*V_w_b_ddot(2) - C_psi*C_theta*V_w_b(1)*x_dot(9)^2 - C_psi*C_theta*V_w_b(1)*x_dot(8)^2 + C_phi*S_psi*V_w_b(2)*x_dot(7)^2 + C_phi*S_psi*V_w_b(2)*x_dot(9)^2 - C_phi*C_psi*V_w_b(2)*omega_ddot(3) - S_phi*S_psi*V_w_b(3)*x_dot(7)^2 - S_phi*S_psi*V_w_b(3)*x_dot(9)^2 + C_phi*S_psi*V_w_b(3)*omega_ddot(1) + C_psi*S_phi*V_w_b(3)*omega_ddot(3) - C_theta*S_psi*V_w_b(1)*omega_ddot(3) - C_phi*C_psi*S_theta*V_w_b(3)*x_dot(7)^2 - C_phi*C_psi*S_theta*V_w_b(3)*x_dot(9)^2 + 2*C_phi*C_psi*V_w_b(3)*x_dot(7)*x_dot(9) - C_phi*C_psi*S_theta*V_w_b(3)*x_dot(8)^2 + C_phi*C_psi*C_theta*V_w_b(3)*omega_ddot(2) - C_psi*S_phi*S_theta*V_w_b(2)*x_dot(7)^2 - C_psi*S_phi*S_theta*V_w_b(2)*x_dot(9)^2 + 2*C_psi*S_phi*V_w_b(2)*x_dot(7)*x_dot(9) - C_psi*S_phi*S_theta*V_w_b(2)*x_dot(8)^2 + C_phi*C_psi*S_theta*V_w_b(2)*omega_ddot(1) + C_psi*C_theta*S_phi*V_w_b(2)*omega_ddot(2) - C_psi*S_phi*S_theta*V_w_b(3)*omega_ddot(1) - C_phi*S_psi*S_theta*V_w_b(3)*omega_ddot(3) + 2*S_psi*S_theta*V_w_b(1)*x_dot(9)*x_dot(8) - S_phi*S_psi*S_theta*V_w_b(2)*omega_ddot(3) + 2*C_phi*C_psi*C_theta*V_w_b_dot(3)*x_dot(8) + 2*C_phi*C_psi*S_theta*V_w_b_dot(2)*x_dot(7) + 2*C_psi*C_theta*S_phi*V_w_b_dot(2)*x_dot(8) - 2*C_psi*S_phi*S_theta*V_w_b_dot(3)*x_dot(7) - 2*C_phi*S_psi*S_theta*V_w_b_dot(3)*x_dot(9) - 2*S_phi*S_psi*S_theta*V_w_b_dot(2)*x_dot(9) + 2*C_phi*C_psi*C_theta*V_w_b(2)*x_dot(7)*x_dot(8) - 2*C_psi*C_theta*S_phi*V_w_b(3)*x_dot(7)*x_dot(8) - 2*C_phi*C_theta*S_psi*V_w_b(3)*x_dot(9)*x_dot(8) - 2*C_phi*S_psi*S_theta*V_w_b(2)*x_dot(7)*x_dot(9) - 2*C_theta*S_phi*S_psi*V_w_b(2)*x_dot(9)*x_dot(8) + 2*S_phi*S_psi*S_theta*V_w_b(3)*x_dot(7)*x_dot(9);
+    x_dot(17) = C_psi*S_phi*V_w_b_ddot(3) - C_phi*C_psi*V_w_b_ddot(2) + C_theta*S_psi*V_w_b_ddot(1) - S_phi*S_psi*V_w_b(3)*omega_ddot(3) - S_psi*S_theta*V_w_b(1)*omega_ddot(2) + 2*C_phi*C_psi*V_w_b_dot(3)*x_dot(7) + 2*C_psi*C_theta*V_w_b_dot(1)*x_dot(9) + 2*C_psi*S_phi*V_w_b_dot(2)*x_dot(7) + 2*C_phi*S_psi*V_w_b_dot(2)*x_dot(9) - 2*S_phi*S_psi*V_w_b_dot(3)*x_dot(9) + C_phi*S_psi*S_theta*V_w_b_ddot(3) - 2*S_psi*S_theta*V_w_b_dot(1)*x_dot(8) + S_phi*S_psi*S_theta*V_w_b_ddot(2) + C_phi*C_psi*V_w_b(2)*x_dot(7)^2 + C_phi*C_psi*V_w_b(2)*x_dot(9)^2 - C_psi*S_phi*V_w_b(3)*x_dot(7)^2 - C_psi*S_phi*V_w_b(3)*x_dot(9)^2 - C_theta*S_psi*V_w_b(1)*x_dot(9)^2 + C_phi*C_psi*V_w_b(3)*omega_ddot(1) - C_theta*S_psi*V_w_b(1)*x_dot(8)^2 + C_psi*C_theta*V_w_b(1)*omega_ddot(3) + C_psi*S_phi*V_w_b(2)*omega_ddot(1) + C_phi*S_psi*V_w_b(2)*omega_ddot(3) - C_phi*S_psi*S_theta*V_w_b(3)*x_dot(7)^2 - C_phi*S_psi*S_theta*V_w_b(3)*x_dot(9)^2 - 2*C_phi*S_psi*V_w_b(3)*x_dot(7)*x_dot(9) - C_phi*S_psi*S_theta*V_w_b(3)*x_dot(8)^2 + C_phi*C_psi*S_theta*V_w_b(3)*omega_ddot(3) - 2*C_psi*S_theta*V_w_b(1)*x_dot(9)*x_dot(8) + C_phi*C_theta*S_psi*V_w_b(3)*omega_ddot(2) - S_phi*S_psi*S_theta*V_w_b(2)*x_dot(7)^2 - S_phi*S_psi*S_theta*V_w_b(2)*x_dot(9)^2 - 2*S_phi*S_psi*V_w_b(2)*x_dot(7)*x_dot(9) - S_phi*S_psi*S_theta*V_w_b(2)*x_dot(8)^2 + C_phi*S_psi*S_theta*V_w_b(2)*omega_ddot(1) + C_psi*S_phi*S_theta*V_w_b(2)*omega_ddot(3) + C_theta*S_phi*S_psi*V_w_b(2)*omega_ddot(2) - S_phi*S_psi*S_theta*V_w_b(3)*omega_ddot(1) + 2*C_phi*C_psi*S_theta*V_w_b_dot(3)*x_dot(9) + 2*C_phi*C_theta*S_psi*V_w_b_dot(3)*x_dot(8) + 2*C_phi*S_psi*S_theta*V_w_b_dot(2)*x_dot(7) + 2*C_psi*S_phi*S_theta*V_w_b_dot(2)*x_dot(9) + 2*C_theta*S_phi*S_psi*V_w_b_dot(2)*x_dot(8) - 2*S_phi*S_psi*S_theta*V_w_b_dot(3)*x_dot(7) + 2*C_phi*C_psi*C_theta*V_w_b(3)*x_dot(9)*x_dot(8) + 2*C_phi*C_psi*S_theta*V_w_b(2)*x_dot(7)*x_dot(9) + 2*C_phi*C_theta*S_psi*V_w_b(2)*x_dot(7)*x_dot(8) + 2*C_psi*C_theta*S_phi*V_w_b(2)*x_dot(9)*x_dot(8) - 2*C_psi*S_phi*S_theta*V_w_b(3)*x_dot(7)*x_dot(9) - 2*C_theta*S_phi*S_psi*V_w_b(3)*x_dot(7)*x_dot(8);
+    x_dot(18) = C_phi*C_theta*V_w_b_ddot(3) - S_theta*V_w_b_ddot(1) - 2*C_theta*V_w_b_dot(1)*x_dot(8) + C_theta*S_phi*V_w_b_ddot(2) + S_theta*V_w_b(1)*x_dot(8)^2 - C_theta*V_w_b(1)*omega_ddot(2) - C_phi*S_theta*V_w_b(3)*omega_ddot(2) - S_phi*S_theta*V_w_b(2)*omega_ddot(2) + 2*C_phi*C_theta*V_w_b_dot(2)*x_dot(7) - 2*C_theta*S_phi*V_w_b_dot(3)*x_dot(7) - 2*C_phi*S_theta*V_w_b_dot(3)*x_dot(8) - 2*S_phi*S_theta*V_w_b_dot(2)*x_dot(8) - C_phi*C_theta*V_w_b(3)*x_dot(7)^2 - C_phi*C_theta*V_w_b(3)*x_dot(8)^2 - C_theta*S_phi*V_w_b(2)*x_dot(7)^2 - C_theta*S_phi*V_w_b(2)*x_dot(8)^2 + C_phi*C_theta*V_w_b(2)*omega_ddot(1) - C_theta*S_phi*V_w_b(3)*omega_ddot(1) - 2*C_phi*S_theta*V_w_b(2)*x_dot(7)*x_dot(8) + 2*S_phi*S_theta*V_w_b(3)*x_dot(7)*x_dot(8);
+
 end
 
 % Anamation Information
@@ -433,9 +450,7 @@ function [points,colors,history] = get_drawing(x,~,param)
 end
 
 % y_r Conversion
-function [y_r_out,y_r_dot_out] = get_y_r(z,y_m,x)
-    V_w_b = [0;0;0];%y_m(13:15); % Assume No wind
-    V_a_b_dot = z(9:11); % By no wind assumption
+function [y_r_out,y_r_dot_out] = get_y_r(z,x,param)
 
     p_d = x(3);
     u = x(4);
@@ -447,29 +462,42 @@ function [y_r_out,y_r_dot_out] = get_y_r(z,y_m,x)
     p = x(10);
     q = x(11);
     r = x(12);
+    
+    g = param.g;
+    V_w_g = x(13:15);
+    V_w_g_dot = x(16:18);
+    V_g_b_dot = z(9:11)-[ g*sin(theta);
+                         -g*cos(theta)*sin(phi);
+                         -g*cos(theta)*cos(phi)];
 
     R_bv = get_rotation(phi,theta,psi,'b->v');
+    R_vb = get_rotation(phi,theta,psi,'v->b');
     V_g_g = R_bv*[u;v;w];
     p_d_dot = V_g_g(3);
+    V_w_b = R_vb*V_w_g;
+    V_w_b_dot = R_vb*V_w_g_dot;
     
     V_g_b = [u;v;w];
     V_a_b = V_g_b - V_w_b;
+    V_a_b_dot = V_g_b_dot-V_w_b_dot;
+    
     u_a = V_a_b(1);
     v_a = V_a_b(2);
     w_a = V_a_b(3);
     u_a_dot = V_a_b_dot(1);
     v_a_dot = V_a_b_dot(2);
     w_a_dot = V_a_b_dot(3);
+    
     V_a = sqrt(sum(V_a_b.^2));
     V_a_dot = sqrt(sum(V_a_b_dot.^2));
     beta = atan2(v_a,sqrt(u_a^2+w_a^2));
-    chi = atan2(V_g_g(2),V_g_g(1));%y_m(11);
+    chi = atan2(V_g_g(2),V_g_g(1));
     beta_dot = 1/(v_a^2/(u_a^2+w_a^2)+1)*(v_a_dot/sqrt(u_a^2+w_a^2)-v_a*(u_a*u_a_dot+w_a*w_a_dot)/(u_a^2+w_a^2)^(3/2));
     
     rotational_velocity = [1,sin(phi)*tan(theta),cos(phi)*tan(theta);
                            0,cos(phi),-sin(phi);
                            0,sin(phi)/cos(theta),cos(phi)/cos(theta)]*[p;q;r];
-    phi_dot = rotational_velocity(1); % Check this
+    phi_dot = rotational_velocity(1);
     theta_dot = rotational_velocity(2);
     chi_dot = rotational_velocity(3);
     
@@ -504,9 +532,6 @@ function y_m = get_y_m(z_f,param)
     p=z_f(12);
     q=z_f(13);
     r=z_f(14);
-    u = z_f(15);
-    v = z_f(16);
-    w = z_f(17);
     
     g = param.g;
     
@@ -517,13 +542,17 @@ function y_m = get_y_m(z_f,param)
     
     u_a = sqrt(2/air.rho*P_dynamic);
     
-%     phi = atan2(a_y,a_z);
-%     theta = atan2(a_x,sqrt(g^2-a_x^2));
-%     psi = psi - param.declination;
-
-    phi = a_x;
-    theta = a_y;
-    psi = a_z;
+    phi = atan2(-a_y,-a_z);
+    theta = atan2(a_x,sqrt(g^2-a_x^2));
+    psi = psi - param.declination;
+    
+    W = param.wind.base;
+    w_n = W(1);
+    w_e = W(2);
+    
+    w_n = u_a*cos(psi)+w_n-V_gh*cos(chi);
+    w_e = u_a*sin(psi)+w_e-V_gh*sin(chi);
+    w_d = 0;
 
     y_m(1,1) = p_n;
     y_m(2,1) = p_e;
@@ -537,9 +566,9 @@ function y_m = get_y_m(z_f,param)
     y_m(10,1) = r;
     y_m(11,1) = chi;
     y_m(12,1) = V_gh;
-    y_m(13,1) = u; % Needs Updating!!!!!!!!!!!!!!!!!!!!!!!
-    y_m(14,1) = v;
-    y_m(15,1) = w;
+    y_m(13,1) = w_n; 
+    y_m(14,1) = w_e;
+    y_m(15,1) = w_d;
 end
 
 % Other Functions
@@ -558,11 +587,17 @@ function output = get_x_star(input,V_a,R,gamma)
               0;
               -V_a/R*sin(alpha + gamma);
               V_a/R*sin(phi)*cos(alpha + gamma);
-              V_a/R*cos(phi)*cos(alpha + gamma)];
+              V_a/R*cos(phi)*cos(alpha + gamma);
+              0;
+              0;
+              0;
+              0;
+              0;
+              0];
 end
 
 function output = get_x_dot_star(V_a,R,gamma)
-    output = [V_a*cos(gamma);0;-V_a*sin(gamma);0;0;0;0;0;V_a/R;0;0;0];
+    output = [V_a*cos(gamma);0;-V_a*sin(gamma);0;0;0;0;0;V_a/R;0;0;0;0;0;0;0;0;0];
 end
 
 function output = get_u_star(input,V_a,R,gamma,param)
@@ -577,7 +612,7 @@ function output = get_u_star(input,V_a,R,gamma,param)
     r       = x(12);
     air  = atmosphere(0);
     rho = air.rho;
-    my_unpack(param)
+    my_unpack(param.aircraft)
     alpha = input(1);
     beta = input(2);
     
@@ -593,7 +628,7 @@ function output = get_u_star(input,V_a,R,gamma,param)
 
     % Control Inputs nessisary to Cause these Forces
     delta_e = ((Jxz*(p^2-r^2)+(Jx-Jz)*p*r)/(1/2*rho*V_a^2*c*S_wing) - C_m_0 - C_m_alpha*alpha - C_m_q*c*q/(2*V_a))/C_m_delta_e;
-    delta_t = sqrt((2*mass*(-r*v+q*w+g*sin(theta)) - rho*V_a^2*S_wing*(C_X+C_X_q*c*q/(2*V_a)+C_X_delta_e*delta_e))/(rho*S_prop*C_prop*k_motor^2)+(V_a/k_motor)^2);
+    delta_t = sqrt((2*mass*(-r*v+q*w+param.g*sin(theta)) - rho*V_a^2*S_wing*(C_X+C_X_q*c*q/(2*V_a)+C_X_delta_e*delta_e))/(rho*S_prop*C_prop*k_motor^2)+(V_a/k_motor)^2);
     delta_long = [C_p_delta_a,C_p_delta_r;C_r_delta_a,C_r_delta_r]^-1*[(-Gamma(1)*p*q+Gamma(2)*q*r)/(1/2*rho*V_a^2*S_wing*b)-C_p_0-C_p_beta*beta-C_p_p*b*p/(2*V_a)-C_p_r*b*r/(2*V_a);
                                                                        (-Gamma(7)*p*q+Gamma(1)*q*r)/(1/2*rho*V_a^2*S_wing*b)-C_r_0-C_r_beta*beta-C_r_p*b*p/(2*V_a)-C_r_r*b*r/(2*V_a)];
     % Pack
@@ -601,11 +636,11 @@ function output = get_u_star(input,V_a,R,gamma,param)
 end
 
 function [a_phi_1,a_phi_2,a_beta_1,a_beta_2,a_theta_1,a_theta_2,a_theta_3,a_V_1,a_V_2,a_V_3] = get_tf_coefficents(param)
-    my_unpack(param)
-    delta_e = u_0(2);
-    delta_t = u_0(4);
-    alpha = atan2(x_0(6),x_0(4));
-    V_a = trim.V_a;
+    my_unpack(param.aircraft)
+    delta_e = param.u_0(2);
+    delta_t = param.u_0(4);
+    alpha = atan2(param.x_0(6),param.x_0(4));
+    V_a = param.trim.V_a;
     a_phi_1     = 1/4*rho*V_a*S_wing*b^2*C_p_p;
     a_phi_2     = 1/2*rho*V_a^2*S_wing*b*C_p_delta_a;
     a_beta_1    = -rho*V_a*S_wing/(2*mass)*C_Y_beta; 
@@ -615,7 +650,7 @@ function [a_phi_1,a_phi_2,a_beta_1,a_beta_2,a_theta_1,a_theta_2,a_theta_3,a_V_1,
     a_theta_3   = rho*V_a^2*c*S_wing/(2*Jy)*C_m_delta_e;
     a_V_1       = rho*V_a*S_wing/mass*(C_D_0+C_D_alpha*alpha+C_D_delta_e*delta_e) + rho*S_prop/mass*C_prop*V_a;
     a_V_2       = rho*S_prop/mass*C_prop*k_motor^2*delta_t;
-    a_V_3       = g;
+    a_V_3       = param.g;
 end
 
 
