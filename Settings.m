@@ -17,6 +17,9 @@ param.trim.R = Inf;
 param.trim.gamma = 0*pi/180;
 param.trim.h_0 = 100;
 [param.u_0,param.x_0,param.y_r_0] = functions.get_equilibrium('throw',param,functions);
+param.x_0 = [0;0;-100;24.9686;0;1.2523;0;0.0501;0;0;0;0;0;0;0;0;0;0];
+param.u_0 = [0;-0.1251;0;0.3144];
+param.y_r_0 = functions.get_y_r(zeros(length(param.z_names),1),param.x_0,param);
 y_m_0 = [param.x_0(1:3);param.trim.V_a;param.x_0(7:12);param.x_0(9);param.trim.V_a;0;0;0];
 
 x_0s = zeros(size(param.x_names));

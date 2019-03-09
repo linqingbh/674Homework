@@ -249,8 +249,8 @@ function x_dot = eqs_motion(t,x,input,param)
     C_psi = cos(psi);
     % Rotations
     R_vb = get_rotation(phi,theta,psi,'v->b');
-    R_v12b = get_rotation(phi,theta,psi,'v12->b');
-    R_bv12 = get_rotation(phi,theta,psi,'v12->b');
+%     R_v12b = get_rotation(phi,theta,psi,'v12->b');
+    R_bv12 = get_rotation(phi,theta,psi,'b->v12');
     % Wind Triangle
      V_w_b = R_vb*V_w_g;
     V_g_b = [u;v;w];
@@ -333,7 +333,7 @@ function x_dot = eqs_motion(t,x,input,param)
     Acceleration            = [r*v-q*w;
                                p*w-r*u;
                                q*u-p*v];
-    Angular_Velocity        = R_v12b;
+    Angular_Velocity        = R_bv12;
     Angular_Acceleration    = [Gamma(1)*p*q-Gamma(2)*q*r,Gamma(3)*l+Gamma(4)*n;
                                Gamma(5)*p*r-Gamma(6)*(p^2-r^2),1/Jy*m;
                                Gamma(7)*p*q-Gamma(1)*q*r,Gamma(4)*l+Gamma(8)*n];
