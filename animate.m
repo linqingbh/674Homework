@@ -174,6 +174,7 @@ classdef animate < handle
         
         function [x,data,t] = get_data(self,time_indexes)
             data = [self.core.subscribe_history('r');
+                    self.core.subscribe_history('d');
                     self.core.subscribe_history('x');
                     self.core.subscribe_history('x_dot');
                     self.core.subscribe_history('z');
@@ -203,6 +204,7 @@ classdef animate < handle
         
         function [var_names,plot_names] = get_names(self)
             var_names = ["r_{" + self.param.r_names + "}";
+                         self.param.d_names;
                          self.param.x_names;
                          self.param.x_names + "_{dot}";
                          self.param.z_names;
@@ -210,7 +212,7 @@ classdef animate < handle
                          "y_m_{" + self.param.m_names + "}";
                          "y_m_hat_{" + self.param.m_names + "}";
                          "x_hat_{" + self.param.x_names + "}";
-                         "d_hat_{" + self.param.r_names + "}";
+                         "d_hat_{" + self.param.d_names + "}";
                          "d_hat_e_{" + self.param.x_names + "}";
                          "y_r_{" + self.param.r_names + "}";
                          "y_r_hat_{" + self.param.r_names + "}";

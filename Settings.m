@@ -17,9 +17,11 @@ param.trim.R = Inf;
 param.trim.gamma = 0*pi/180;
 param.trim.h_0 = 100;
 [param.u_0,param.x_0,param.y_r_0] = functions.get_equilibrium('throw',param,functions);
-param.x_0 = [0;0;-100;24.9686;0;1.2523;0;0.0501;0;0;0;0;0;0;0;0;0;0];
+
+param.x_0 = [0;0;-100;24.9686;0;1.2523;0;0.0501;0;0;0;0];
 param.u_0 = [0;-0.1251;0;0.3144];
-param.y_r_0 = functions.get_y_r(zeros(length(param.z_names),1),param.x_0,param);
+param.y_r_0 = functions.get_y_r(zeros(length(param.z_names),1),param.x_0,zeros(length(param.d_names),1),param);
+
 y_m_0 = [param.x_0(1:3);param.trim.V_a;param.x_0(7:12);param.x_0(9);param.trim.V_a;0;0;0];
 
 x_0s = zeros(size(param.x_names));
@@ -30,7 +32,7 @@ u_0s = zeros(size(param.u_names));
 
 %% Model
 assumed_param = param;
-assumed_param.wind = wind(wind.steady,[0;0;0]);
+assumed_param.wind = wind(wind.steady,[0;0;0],param.aircraft.V_design);
 [param.A,param.B] = get_linear_model(functions.eqs_motion,assumed_param);
 
 %% Input Parameters
@@ -40,6 +42,7 @@ amplitude   = 1;        % Amplitude of signal input
 offset      = 0;            % Offset from 0
 phase_delay = 0;        % phase delay of function in rad
 line = function_generator(input,period,amplitude,offset,phase_delay,t);
+
 input       = 'square';  % Type of signal
 period      = 40;        % Period of signal input
 amplitude   = 0.5;        % Amplitude of signal input
@@ -50,35 +53,59 @@ phase_delay = pi/3;        % phase delay of function in rad
 square2 = function_generator(input,period,amplitude,offset,phase_delay,t);
 phase_delay = 2*pi/3;        % phase delay of function in rad
 square3 = function_generator(input,period,amplitude,offset,phase_delay,t);
+
 % Commanded Inputs [chi,phi,h,theta,beta,V_a]
 r = [square1*pi;line;square2*50+100;line;line;square3*10+param.trim.V_a];
 
 %% Simulation Parameters
-settings.active_fig  = 1;
+settings.active_fig  = 2;
 settings.show_hist   = true;
 settings.animation   = true;
 settings.plot        = true;
 settings.simulate    = true;
 settings.plot_names  = {%["p_{n} - Longitude (m)","p_{n}"];
 %                         ["p_{e} - Latitude (m)","p_{e}"];
+
                         ["p_{d} - Altitude (m)","y_r_{h}","r_{h}"];
-                        ["\theta - Pitch (rad)","y_r_{\theta}","r_{\theta}"];%,"y_{\theta}_{dot}"];
+                        ["\theta - Pitch (rad)","y_r_{\theta}","r_{\theta}"];
                         ["\chi - Course (rad)","y_r_{\chi}","r_{\chi}"];
-                        ["\phi - Roll (rad)","y_r_{\phi}","r_{\phi}"];%,"y_{\phi}_{dot}"];
+                        ["\phi - Roll (rad)","y_r_{\phi}","r_{\phi}"];
                         ["\beta - Sideslip (rad)","y_r_{\beta}","r_{\beta}"]
-                        ["delta_e - Elevator (rad)","delta_e"]
-%                         ["V_a - Forward Velocity (m/s)","y_r_{V_a}","r_{V_a}"];
+                        ["V_a - Forward Velocity (m/s)","y_r_{V_a}","r_{V_a}"];
+                        
 %                         ["\delta_{a} - Ailorons (rad)","delta_a"];
 %                         ["\delta_{e} - Elevator (rad)","delta_e"];
 %                         ["\delta_{r} - Ruder (rad)","delta_r"];
 %                         ["\delta_{t} - Throttle (%)","delta_t"];
 %                         ["y_{r}_{dot} - Rate of Change","y_r_dot_{h}"]%,"y_r_dot_{\theta}","y_r_dot_{\chi}","y_r_dot_{\phi}","y_r_dot_{\beta}","y_r_dot_{V_a}"]
-%                         ["h_dot - Rate of Climb (m/s)","y_{h}_{dot}"]
-                        };
 
-                    
-% General Variable to implement uncertainty
-settings.implement_uncertainty = false;
+%                         ["p_{n} - Longitude (m)","p_{n}","z_hat_{GPS_n}"];
+%                         ["p_{e} - Latitude (m)","p_{e}","z_hat_{GPS_e}"];
+%                         ["h - Altitude (m)","y_r_{h}","z_hat_{GPS_h}"];
+%                         ["\chi - Course (rad)","y_r_{\chi}","z_hat_{GPS_chi}"];
+%                         ["Bar - Barometer (Pa)","z_hat_{Bar}"];
+%                         ["Pito - Pito Tube (Pa)","z_hat_{Pito}"];
+%                         ["Comp - Compass Heading (rad)","\psi","z_hat_{Comp}"];
+%                         ["a - Accelormeter (m\s^{2})","z_hat_{Accel_x}","z_hat_{Accel_y}","z_hat_{Accel_z}"];
+%                         ["Omega_dot - Rate Gyro (rad/s)","z_hat_{RateGyro_p}","z_hat_{RateGyro_q}","z_hat_{RateGyro_r}"]
+                          
+%                         ["p_{n} - Longitude (m)","p_{n}","y_m_{p_{n}}"];
+%                         ["p_{e} - Latitude (m)","p_{e}","y_m_{p_{e}}"];
+%                         ["h - Altitude (m)","p_{d}","y_m_{p_{d}}"];
+%                         ["u_a - Forward Velocity (m/s)","u","y_m_{u_a}"];
+%                         ["\phi - Roll (rad)","\phi","y_m_{\phi}"];
+%                         ["\theta - Pitch (rad)","\theta","y_m_{\theta}"];
+%                         ["\psi - Yaw (rad)","\psi","y_m_{\psi}"];
+%                         ["p - Roll Rate (rad\s)","p","y_m_{p}"];
+%                         ["q - Pitch Rate (rad\s)","q","y_m_{q}"];
+%                         ["r - Yaw Rate (rad\s)","r","y_m_{r}"];
+%                         ["\chi - Course (rad)","y_r_{\chi}","y_m_{\chi}"]
+%                         ["V_gh - Horizontal Velcoity (m/s)","y_r_{V_a}","y_m_{V_gh}"]
+
+%                           ["w_n - North Wind (m/s)","w_n"]
+%                           ["w_e - East Wind (m/s)","w_e"]
+%                           ["w_d - Down Wind (m/s)","w_d"]
+                        };
                     
 % Display warnings?
 warning('off','all')
@@ -86,6 +113,7 @@ warning('off','all')
 %% Publish Data
 core.publish_list("t",t)
 core.publish_list("r",r)
+core.publish("d",[param.wind.base;0;0;0])
 core.publish("x",param.x_0)
 core.publish("x_dot",x_0s)
 core.publish("z",z_0s)
@@ -126,6 +154,7 @@ zeta_V = 0.707;
 
 %% Sensors
 sense.exact = true;
+sense.d_names = [];
 
 sense.type = sensors.GPS;
 sense.x_names = ["p_{n}";"p_{e}";"p_{d}"];
@@ -157,20 +186,42 @@ sense.x_names = ["p","q","r"];
 sense.z_names = ["RateGyro_p";"RateGyro_q";"RateGyro_r"];
 core.functions.sensors(6) = sensors(sense,param);
 
-%% Observers
-observe.L.sigma = 0.05;
+%% State Observers
 observe.r_names = [];
+observe.m_names = [];
 observe.u_names = [];
+observe.d_names = [];
+observe.L = 1;
 
 observe.type = observers.exact;
-observe.m_names = [];
 observe.x_names = ["p_{n}";"p_{e}";"p_{d}";"u";"v";"w";"\phi";"\theta";"\psi";"p";"q";"r"];
 core.functions.observers(1) = observers(observe,core);
 
-% observe.type = observers.dy;
-% observe.m_names = ["p_{n}";"p_{e}";"p_{d}"];
-% observe.x_names = ["u","v","w"];
-% core.functions.observers(2) = observers(observe,core);
+observe.type = observers.ekf;
+observe.x_names = ["p_{n}";"p_";"\psi";"q";"r"];
+observe.d_names = ["error_w_n";"error_w_e"];
+observe.u_names = ["u_a";"V_gh";"\chi"];
+observe.L.f = @(x_hat,y_m,r,u) [V_gh*cos(chi);
+                                V_gh*sin(chi);
+                                ((V_*cos(psi)+w_n)*(-V_a*psi_dot*sin(psi))+(V_a*sin(psi)+w_e)*(V_a*psi_dot*cos(psi)))/V_gh;
+                                param.g/V_gh*tan(phi);
+                                0;
+                                0;
+                                q*sin(phi)/cos(theta)+r*cos(phi)/cos(theta)];
+observe.L.A = @(x_hat,y_m,r,u) [0,0;0,0];
+observe.L.h = @(x_hat,y_m,r,u) [p_n;
+                                p_e;
+                                V_gh;
+                                chi;
+                                V_a*cos(psi)+w_n-V_gh*cos(chi);
+                                V_a*sin(psi)+w_e-V_gh*sin(chi)];
+observe.L.C = 
+core.functions.observers(2) = observers(observe,core);
+
+observe.type = observers.pass;
+observe.d_names = "w_d";
+observe.m_names = "w_d";
+core.functions.disturbance_observers(2) = observers(observe,core);
 
 %% Controllers
 
@@ -189,6 +240,8 @@ w_n_V_2 = 1/W_V_2*w_n_theta;
 K_theta_DC = param.delta_e_sat_lim.high/e_max_theta*sign(a_theta_3)*a_theta_3/(a_theta_2+param.delta_e_sat_lim.high/e_max_theta*sign(a_theta_3)*a_theta_3);
 
 control.anti_windup = 'none'; % 'derivative', 'saturation', 'both', 'none'
+
+control.d_names = [];
 
 switch control.type
     case controllers.OL

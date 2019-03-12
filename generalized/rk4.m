@@ -1,20 +1,15 @@
-function [states,states_dot] = rk4(fun,time,initial,end_flag)
-    if ~exist('end_flag','var'), end_flag = false;end
-    states = zeros(length(initial),length(time));
-    states_dot = zeros(length(initial),length(time));
-    states(:,1) = initial;
-    states_dot(:,1) = fun(time(1),initial);
-    for i = 2:length(time)
-        step = time(i)-time(i-1);
-        k1 = states_dot(:,i-1);
-        k2 = fun(time(i-1)+step/2,states(:,i-1) + abs(step)/2*k1);
-        k3 = fun(time(i-1)+step,states(:,i-1) + abs(step)/2*k2);
-        k4 = fun(time(i-1)+step,states(:,i-1) + abs(step)*k3);
-        states(:,i) = states(:,i-1) + step/6 * (k1 + 2*k2 + 2*k3 + k4);
-        states_dot(:,i) = fun(time(i),states(:,i));
-    end
-    if end_flag
-        states = states(:,2:end);
-        states_dot = states_dot(:,2:end);
+function [state,state_dot,optional_outputs] = rk4(fun,t,initial)
+    
+    step = t(2)-t(1);
+    k1 = fun(t(1),initial);
+    k2 = fun(t(1)+step/2,initial + abs(step)/2*k1);
+    k3 = fun(t(2),initial + abs(step)/2*k2);
+    k4 = fun(t(2),initial + abs(step)*k3);
+    state = initial + step/6 * (k1 + 2*k2 + 2*k3 + k4);
+    
+    if nargout == 3
+        [state_dot,optional_outputs] = fun(t(2),state);
+    else
+        state_dot = fun(t(2),state);
     end
 end

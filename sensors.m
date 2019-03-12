@@ -14,12 +14,12 @@ classdef sensors < handle
         last_update = -Inf
         
         % For Implimentation
+        d_indexes
         x_indexes
         z_indexes
         filter
         y_m
         y_m_filtered
-        y_m_hat
         
         % Gps Specific Values
         k_gps = 1/1600;
@@ -40,9 +40,12 @@ classdef sensors < handle
         % Class Initializer -----------------------------------------------
         function self = sensors(sense,param)
             if ~isfield(sense,'exact'),sense.exact = false;end
+            
+            self.d_indexes = get_indexes(param.d_names,sense.d_names);
             self.x_indexes = get_indexes(param.x_names,sense.x_names);
             self.z_indexes = get_indexes(param.z_names,sense.z_names);
             self.eta = @self.normal_error;
+            
             switch sense.type
                 case self.GPS
                     self.sensor_function = @self.execute_GPS;
@@ -113,22 +116,27 @@ classdef sensors < handle
             eta = 0;
         end
         
-        function [reading,reading_filtered,measurment] = sense(self,x,x_dot,t)
+        function measurment = get_measurment(self,x,x_dot,d)
+            % Get Significant Variables
+            x = x(self.x_indexes);
+            x_dot = x_dot(self.x_indexes);
+            d = d(self.d_indexes);
+
+            % Use sensors to sense value
+            measurment = self.sensor_function(x,x_dot,d);
+        end
+        
+        function [reading,reading_filtered,measurment] = sense(self,x,x_dot,d,t)
             dt = t - self.last_update;
             
+            measurment = self.get_measurment(x,x_dot,d);
+            
             if dt >= 1/self.update_rate
-
-                % Get Significant Variables
-                x = x(self.x_indexes);
-                x_dot = x_dot(self.x_indexes);
-
-                % Use sensors to sense value
-                measurment = self.sensor_function(x,x_dot);
                 
                 % Saturate
                 measurment = min(measurment,self.sat_lim.high);
                 measurment = max(measurment,self.sat_lim.low);
-                
+
                 % Add Error
                 reading = measurment + self.beta + self.eta(measurment);
                 
@@ -138,19 +146,17 @@ classdef sensors < handle
                 % Save
                 self.y_m = reading;
                 self.y_m_filtered = reading_filtered;
-                self.y_m_hat = measurment;
                 self.last_update = t;
             else
                 reading = self.y_m;
                 reading_filtered = self.y_m_filtered;
-                measurment = self.y_m_hat;
             end
         end
     end
     
     methods (Static)
         % Sensor Functions ------------------------------------------------
-        function y_m = execute_GPS(x,x_dot)
+        function y_m = execute_GPS(x,x_dot,~)
             p_n=x(1);p_e=x(2);h=-x(3);
             V_n=x_dot(1);V_e=x_dot(2);
             
@@ -162,22 +168,22 @@ classdef sensors < handle
             y_m(5) = atan2(V_e,V_n);
         end
         
-        function y_m = execute_Bar(x,~)
+        function y_m = execute_Bar(x,~,~)
             g = 9.81;
             air = atmosphere(0);
             y_m = air.rho*g*(-x);
         end
         
-        function y_m = execute_Pito(x,~)
+        function y_m = execute_Pito(x,~,~)
             air = atmosphere(0);
             y_m = air.rho*x^2/2;
         end
         
-        function y_m = execute_Comp(x,~)
+        function y_m = execute_Comp(x,~,~)
             y_m = x;
         end
         
-        function y_m = execute_Accel(x,x_dot)
+        function y_m = execute_Accel(x,x_dot,~)
             u=x(1);v=x(2);w=x(3);phi=x(4);theta=x(5);p=x(6);q=x(7);r=x(8);
             u_dot=x_dot(1);v_dot=x_dot(2);w_dot=x_dot(3);
             g = 9.81;
@@ -188,11 +194,11 @@ classdef sensors < handle
             y_m(3) = w_dot+p*v-q*u-g*cos(theta)*cos(phi);
         end
         
-        function y_m = execute_RateGyro(x,~)
+        function y_m = execute_RateGyro(x,~,~)
             y_m = x;
         end
         
-        function y_m = execute_Exact(x,~)
+        function y_m = execute_Exact(x,~,~)
             y_m = x;
         end
         

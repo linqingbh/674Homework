@@ -9,6 +9,7 @@ classdef controllers < handle
         
         % States
         t = 0
+        d_indexes
         r_in_indexes
         r_out_indexes
         u_indexes
@@ -57,6 +58,7 @@ classdef controllers < handle
             self.get_equilibrium = functions.get_equilibrium;
             
             % States
+            self.d_indexes = get_indexes(param.d_names,control.d_names);
             self.r_in_indexes = get_indexes(param.r_names,control.r_names);
             self.r_out_indexes = get_indexes(param.r_names,control.u_names);
             self.u_indexes = get_indexes(param.u_names,control.u_names);
@@ -125,14 +127,17 @@ classdef controllers < handle
         end
         
         % Main ------------------------------------------------------------
-        function [u,r_out] = control(self,y_r_in,y_r_dot_in,r_in,d_hat,t)
+        function [u,r_out] = control(self,y_r_in,y_r_dot_in,r_in,d,t)
             
             % Unpack
             dt = t - self.t;self.t = t;
             r = r_in(self.r_in_indexes);
+            d = d(self.d_indexes);
+            if isempty(d),d = 0;end
             y_r = y_r_in(self.r_in_indexes);
             y_r_dot = y_r_dot_in(self.r_in_indexes);
             self.error = [self.error,self.get_error(y_r,r,self.r_is_angle)];
+            
             
             % Anti-Windup
             self.derivative_anti_windup(y_r_dot,dt);
@@ -158,7 +163,7 @@ classdef controllers < handle
             % Add Equilibrium
             [u_equilibrium,~,y_r_equilibrium] = self.get_equilibrium(y_r,self.param);
             u_e = [u_equilibrium(self.u_indexes);y_r_equilibrium(self.r_out_indexes)];
-            u_unsat = u + u_e - d_hat;
+            u_unsat = u + u_e - d;
 
             % Saturation & Anti-Windup
             u_sat = self.saturate(u_unsat);
@@ -169,7 +174,7 @@ classdef controllers < handle
             r_out = r_in;
             if ~isempty(self.cascade)
                 r_out(self.r_out_indexes) = u;
-                [u,r_out] = self.cascade.control(y_r_in,y_r_dot_in,r_out,d_hat,t);
+                [u,r_out] = self.cascade.control(y_r_in,y_r_dot_in,r_out,d,t);
             end
         end
     end

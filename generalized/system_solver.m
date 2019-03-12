@@ -6,6 +6,7 @@ classdef system_solver < handle
         D
         I
         x
+        x_dot
         time = 0;
         solver = @rk4
         
@@ -31,20 +32,29 @@ classdef system_solver < handle
                 if nargin>=7,self.solver = varargin{7};end
             end
             self.I = eye(length(self.x));
+            self.x_dot = self.A*self.x;
         end
         
-        function [y,x,x_dot] = propigate(self,u,t)
+        function [y,x,x_dot,y_dot] = propigate(self,u,t)
             if isempty(t)
-                dt = self.time;
+                t_vec = [0,self.time];
             else
-                dt = t - self.time;
+                t_vec = [self.time,t];
+                self.time = t;
             end
-            ode = @(t,x) self.A*x+self.B*u;
-            [x,x_dot] = self.solver(ode,[0,dt],self.x);
+            
+            if t_vec(2) > t_vec(1)
+                ode = @(t,x) self.A*x+self.B*u;
+                [x,x_dot] = self.solver(ode,t_vec,self.x);
+            else
+                x = self.x;
+                x_dot = self.x_dot;
+            end
             y = self.C*x + self.D*u;
-            x = x(:,end);
-            x_dot = x_dot(:,end);
+            y_dot = self.C*x_dot;
+            
             self.x = x;
+            self.x_dot = x_dot;
         end
     end
 end
