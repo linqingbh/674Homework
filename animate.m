@@ -213,7 +213,7 @@ classdef animate < handle
                          "y_m_hat_{" + self.param.m_names + "}";
                          "x_hat_{" + self.param.x_names + "}";
                          "d_hat_{" + self.param.d_names + "}";
-                         "d_hat_e_{" + self.param.x_names + "}";
+                         "x_hat_e_{" + self.param.x_names + "}";
                          "y_r_{" + self.param.r_names + "}";
                          "y_r_hat_{" + self.param.r_names + "}";
                          "y_r_e_{" + self.param.r_names + "}";

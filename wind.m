@@ -33,18 +33,10 @@ classdef wind < handle
         function [base,gust,gust_dot] = get(self,t)
             base = self.base;
             
-            if t == 1.86
-                throw =1;
-            end
-            
             white_noise = randn;
             [gust(1,1),~,~,gust_dot(1,1)] = self.gust(1).propigate(white_noise,t);
             [gust(2,1),~,~,gust_dot(2,1)] = self.gust(2).propigate(white_noise,t);
             [gust(3,1),~,~,gust_dot(3,1)] = self.gust(3).propigate(white_noise,t);
-            
-            if any(gust>0) || any(gust_dot>0)
-                throw =1;
-            end
         end
     end
 end

@@ -40,12 +40,12 @@ classdef system_solver < handle
                 t_vec = [0,self.time];
             else
                 t_vec = [self.time,t];
-                self.time = t;
             end
             
             if t_vec(2) > t_vec(1)
                 ode = @(t,x) self.A*x+self.B*u;
                 [x,x_dot] = self.solver(ode,t_vec,self.x);
+                self.time = t;
             else
                 x = self.x;
                 x_dot = self.x_dot;

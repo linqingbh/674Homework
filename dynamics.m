@@ -13,12 +13,12 @@ classdef dynamics < handle
         % Functions
         eqs_motion
         sensors
+        filters
         observers
         get_y_m
         get_y_r
         controllers
         controller_architecture
-        filters
 
         % Uncertianty
         theoretical_param
@@ -39,6 +39,7 @@ classdef dynamics < handle
             % Functions
             self.eqs_motion = functions.eqs_motion;
             self.sensors = functions.sensors;
+            self.filters = functions.filters;
             self.observers = functions.observers;
             self.get_y_m = functions.get_y_m;
             self.get_y_r = functions.get_y_r;
@@ -58,20 +59,21 @@ classdef dynamics < handle
             
             % Iterate through each timestep
             for i = 2:length(r)
-                
                 % Propigate Dynamic Model
                 [self.x,x_dot,d] = rk4(@(time,state) self.eqs_motion(time,state,self.u,self.param),[t(i-1),t(i)],self.x);
                 
                 % Measure
                 z = zeros(size(self.param.z_names));
-                z_f = zeros(size(self.param.z_names));
                 z_hat = zeros(size(self.param.z_names));
                 for j = 1:length(self.sensors)
-                    [z_hat(self.sensors(j).z_indexes),z_f(self.sensors(j).z_indexes),z(self.sensors(j).z_indexes)] = self.sensors(j).sense(self.x,x_dot,d,t(i));
+                    [z(self.sensors(j).z_indexes),z_hat(self.sensors(j).z_indexes)] = self.sensors(j).sense(self.x,x_dot,d,t(i));
                 end
                 
+                % Filter
+                z_f = self.filters.filter_next(z_hat,t(i));
+                
                 % Convert
-                y_m_hat = self.get_y_m(z_f,self.param);
+                y_m_hat = self.get_y_m(z_hat,self.param);
                 y_m = self.get_y_m(z,self.param);
                 
                 % Observe State
@@ -80,6 +82,7 @@ classdef dynamics < handle
                 for j = 1:length(self.observers)
                     [x_hat(self.observers(j).x_indexes),d_hat(self.observers(j).d_indexes)] = self.observers(j).observe(self.x,y_m_hat,r(:,i),self.u,d,t(i));
                 end
+                
                 
                 % Convert
                 [y_r_hat,y_r_dot_hat] = self.get_y_r(z_f,x_hat,d_hat,self.param);

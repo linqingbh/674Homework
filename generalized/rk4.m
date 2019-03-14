@@ -9,7 +9,7 @@ function [state,state_dot,optional_outputs] = rk4(fun,t,initial)
     
     if nargout == 3
         [state_dot,optional_outputs] = fun(t(2),state);
-    else
+    elseif nargout == 2
         state_dot = fun(t(2),state);
     end
 end

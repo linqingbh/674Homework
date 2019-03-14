@@ -46,6 +46,16 @@ classdef observers < handle
             % General to pass to other functions
             self.param = param;
             
+            % Functions of Import
+            observe.L.f = @(x,u) functions.eqs_motion(0,x,u,param);
+            observe.L.h = @(x,u) functions.get_y_m(set_indexes(functions.sensors,'z_indexes','sense',{x,functions.eqs_motion(0,x,u,param),[],0}),param);
+            observe.L.A = @(x,u) numerical_jacobian(@(state) self.L.f(state,u),x);
+            observe.L.B = @(x,u) numerical_jacobian(@(input) self.L.f(x,input),u);
+            observe.L.C = @(x,u,indexes) numerical_jacobian(@(state) self.L.h(state,u),x,0.01,indexes);
+            observe.L.D = @(x,u) numerical_jacobian(@(input) self.L.h(x,input),u);
+            observe.L.P = zeros(length(param.x_0));
+            observe.L.R = sensors.callibrate_sensors(functions.sensors,param.x_0);
+            
             % Param
             self.L = observe.L;
             
@@ -66,7 +76,7 @@ classdef observers < handle
             % Settings
             self.type = observe.type;
             self.m_is_angle = param.m_is_angle(self.m_indexes);  
-            
+
             % Observer Specific
             switch self.type
                 case self.exact
@@ -88,8 +98,8 @@ classdef observers < handle
         end
         
         % Extended Kalman Filter ------------------------------------------
-        function P_dot = covariance(self,P,x,u)
-            P_dot = self.L.A(x,u)*P + P*self.L.A(x,u).' + self.L.Q;
+        function P_dot = covariance(self,P,A)
+            P_dot = A*P + P*A.' + self.L.Q;
         end
         
         % Main ------------------------------------------------------------
@@ -122,12 +132,16 @@ classdef observers < handle
                     self.position = y_m;
                     x_hat = self.velocity;
                 case self.ekf
-                    x_hat = rk4(@(~,state) self.L.f(state,y_m,r,u,d),[self.t,t],self.x_hat);
-                    self.L.P = rk4(@(~,covariance) self.covariance(covariance),[self.t,t],self.L.P);
-                    if y_m ~= self.position
-                        self.L.L = self.L.P*self.L.C(x_hat,y_m,r,u,d).'*(self.L.R+self.L.C(x_hat,y_m,r,u,d)*self.L.P*self.L.C(x_hat,y_m,r,u,d).')^-1;
-                        self.L.P = (eye(length(self.L.L))-self.L.L*self.L.C(x_hat,y_m,r,u,d))*self.L.P;
-                        x_hat = x_hat + self.L.L*(y_m-self.L.h(x_hat,y_m,r,u,d));
+                    x_hat = rk4(@(~,state) self.L.f(state,u),[self.t,t],self.x_hat);
+                    A = self.L.A(x,u);
+                    self.L.P = rk4(@(~,covariance) self.covariance(covariance,A),[self.t,t],self.L.P);
+                    if any(y_m ~= self.position)
+                        i = y_m~=self.position;
+                        C = self.L.C(x_hat,u,i);
+                        self.L.L = self.L.P*C.'*(self.L.R(i,i)+C*self.L.P*C.')^-1;
+                        self.L.P = (eye(length(x_hat))-self.L.L*C)*self.L.P;
+                        y_m_hat = self.L.h(x_hat,u);
+                        x_hat = x_hat + self.L.L*(y_m(i)-y_m_hat(i));
                         self.position = y_m;
                     end
             end
@@ -137,8 +151,8 @@ classdef observers < handle
             self.x_hat = x_hat;
             
             % Pack
-            d_hat = x_hat(end-(length(self.d_indexes-1)):end);
-            x_hat = x_hat(1:length(x_hat));
+            d_hat = x_hat(end-(length(self.d_indexes)-1):end);
+            x_hat = x_hat(1:(length(x_hat)-length(self.d_indexes)));
         end
     end
 end

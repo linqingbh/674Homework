@@ -24,9 +24,9 @@ classdef my_filter < handle
                     self.system{i}.propigate = @(in,~) in;
                 end
                 if length(in_signal(1,:)) > 1
-                    for j = 2:length(signal)
-                        if length(t) > 1
-                            out_signal(i,j) = self.filter_next(in_signal(i,j),t(j));
+                    for j = 2:length(in_signal)
+                        if length(time) > 1
+                            out_signal(i,j) = self.filter_next(in_signal(i,j),time(j));
                         else
                             out_signal(i,j) = self.filter_next(in_signal(i,j));
                         end

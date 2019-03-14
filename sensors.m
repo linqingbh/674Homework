@@ -3,7 +3,9 @@ classdef sensors < handle
         % Error
         sigma
         eta
-        beta = 0
+        beta = 0 % Add randomly scalled bias ###################################
+        sigma_hat = 0
+        beta_hat = 0
         
         % Saturation
         sat_lim = struct('high',Inf,'low',-Inf)
@@ -17,9 +19,7 @@ classdef sensors < handle
         d_indexes
         x_indexes
         z_indexes
-        filter
         y_m
-        y_m_filtered
         
         % Gps Specific Values
         k_gps = 1/1600;
@@ -52,47 +52,38 @@ classdef sensors < handle
                     self.eta = @self.gps_error;
                     self.sigma = [2.1;2.1;4.0];
                     self.update_rate = 1;
-                    initial = [0;0;0;0;0];
                 case self.Bar
                     self.sensor_function = @self.execute_Bar;
                     self.sigma = 10;
                     self.beta = 125;
                     self.sat_lim.high = 100000;
                     self.sat_lim.low = 0;
-                    initial = 0;
                 case self.Pito
                     self.sensor_function = @self.execute_Pito;
                     self.sigma = 2;
                     self.beta = 20;
                     self.sat_lim.high = 4000;
                     self.sat_lim.low = 0;
-                    initial = 0;
                 case self.Comp
                     self.sensor_function = @self.execute_Comp;
                     self.sigma = 0.3*pi/180;
                     self.beta = 1*pi/180+param.declination;
                     self.update_rate = 8;
-                    initial = 0;
                 case self.Accel
                     self.sensor_function = @self.execute_Accel;
                     self.sigma = 0.0025*9.81;
                     self.sat_lim.high = 6*9.81;
                     self.sat_lim.low = -6*9.81;
-                    initial = [0;0;0];
                 case self.RateGyro
                     self.sensor_function = @self.execute_RateGyro;
                     self.sigma = 0.0023;
                     self.sat_lim.high = 350*pi/180;
                     self.sat_lim.low = -350*pi/180;
-                    initial = [0;0;0];
                 case self.Exact
                     self.sensor_function = @self.execute_Exact;
                     self.sigma = 0;
-                    initial = zeros(length(self.x_indexes),1);
             end
-            self.filter = my_filter(1,0.5,initial,0);
-            if sense.exact
-                self.filter = my_filter(0,0.5,initial,0);
+            if sense.perfect
                 self.sat_lim.high = Inf;
                 self.sat_lim.low = -Inf;
                 self.sigma = 0;
@@ -116,49 +107,43 @@ classdef sensors < handle
             eta = 0;
         end
         
-        function measurment = get_measurment(self,x,x_dot,d)
+        function [truth,reading] = sense(self,x,x_dot,d,t)
+            dt = t - self.last_update;
+            
             % Get Significant Variables
             x = x(self.x_indexes);
             x_dot = x_dot(self.x_indexes);
             d = d(self.d_indexes);
 
             % Use sensors to sense value
-            measurment = self.sensor_function(x,x_dot,d);
-        end
-        
-        function [reading,reading_filtered,measurment] = sense(self,x,x_dot,d,t)
-            dt = t - self.last_update;
-            
-            measurment = self.get_measurment(x,x_dot,d);
+            truth = self.sensor_function(x,x_dot,d);
             
             if dt >= 1/self.update_rate
                 
                 % Saturate
-                measurment = min(measurment,self.sat_lim.high);
-                measurment = max(measurment,self.sat_lim.low);
+                sat_truth = min(truth,self.sat_lim.high);
+                sat_truth = max(sat_truth,self.sat_lim.low);
 
                 % Add Error
-                reading = measurment + self.beta + self.eta(measurment);
-                
-                % Remove Error
-                reading_filtered = self.filter.filter_next(reading,t);
+                reading = sat_truth + (self.beta-self.beta_hat) + self.eta(sat_truth);
                 
                 % Save
                 self.y_m = reading;
-                self.y_m_filtered = reading_filtered;
                 self.last_update = t;
             else
                 reading = self.y_m;
-                reading_filtered = self.y_m_filtered;
             end
         end
     end
     
     methods (Static)
         % Sensor Functions ------------------------------------------------
-        function y_m = execute_GPS(x,x_dot,~)
-            p_n=x(1);p_e=x(2);h=-x(3);
-            V_n=x_dot(1);V_e=x_dot(2);
+        function y_m = execute_GPS(x,~,~)
+            p_n=x(1);p_e=x(2);h=-x(3);u=x(4);v=x(5);w=x(6);phi=x(7);theta=x(8);psi=x(9);
+            
+            V_g_g = get_rotation(phi,theta,psi,'b->v',[u;v;w]);
+            V_n = V_g_g(1);
+            V_e = V_g_g(2);
             
             y_m = zeros(5,1);
             y_m(1) = p_n;
@@ -202,5 +187,25 @@ classdef sensors < handle
             y_m = x;
         end
         
+        % Calibration -----------------------------------------------------
+        function [covariance_matrix,bias_list] = callibrate_sensors(sensors,x,iterations)
+            if ~exist('iterations','var'),iterations = 1000;end
+            
+            for i = 1:iterations
+                for j = 1:length(sensors)
+                    [z(i,sensors(j).z_indexes),z_hat(i,sensors(j).z_indexes)] = sensors(j).sense(x,zeros(size(x)),[],0); %#ok<AGROW>
+                    sensors(j).last_update = -Inf;
+                end
+            end
+            
+            covariance_matrix = cov(z_hat-z);
+            bias_list = mean(z_hat-z,1).';
+            
+            for j = 1:length(sensors)
+                sensors(j).sigma_hat = sqrt(diag(covariance_matrix(sensors(j).z_indexes,sensors(j).z_indexes)));
+                sensors(j).beta_hat = bias_list(sensors(j).z_indexes);
+            end
+            
+        end
     end
 end

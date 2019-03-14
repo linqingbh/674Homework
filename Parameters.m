@@ -45,7 +45,7 @@ param.take_off_pitch = 15*pi/180;
 param.d_names = ["w_n";"w_e";"w_d";"w_n_dot";"w_e_dot";"w_d_dot"];
 param.x_names = ["p_{n}";"p_{e}";"p_{d}";"u";"v";"w";"\phi";"\theta";"\psi";"p";"q";"r"];
 param.z_names = ["GPS_n";"GPS_e";"GPS_h";"GPS_Vg";"GPS_chi";"Bar";"Pito";"Comp";"Accel_x";"Accel_y";"Accel_z";"RateGyro_p";"RateGyro_q";"RateGyro_r"];
-param.m_names = ["p_{n}";"p_{e}";"p_{d}";"u_a";"\phi";"\theta";"\psi";"p";"q";"r";"\chi";"V_gh";"error_w_n";"error_w_e";"w_d"];
+param.m_names = ["p_{n}";"p_{e}";"p_{d}";"u_a";"\phi";"\theta";"\psi";"p";"q";"r";"\chi";"V_gh";"w_n";"w_e";"w_d"];
 param.r_names = ["\chi";"\phi";"h";"\theta";"\beta";"V_a"];
 param.u_names = ["delta_a";"delta_e";"delta_r";"delta_t"];
 
@@ -94,7 +94,7 @@ param.tail_h = 0.1*scale;
 % Simulation
 settings.start       = 0;      % s
 settings.step        = 0.02;   % s
-settings.end         = 30;     % s
+settings.end         = 2;     % s
 t = settings.start:settings.step:settings.end;
 
 settings.playback_rate  = 1;
@@ -220,11 +220,8 @@ function [x_dot,d] = eqs_motion(t,x,input,param)
     my_unpack(param.aircraft)
     % Trig
     S_phi = sin(phi);
-    C_phi = cos(phi);
     S_theta = sin(theta);
     C_theta = cos(theta);
-    S_psi = sin(psi);
-    C_psi = cos(psi);
     % Rotations
     R_vb = get_rotation(phi,theta,psi,'v->b');
     R_bv = get_rotation(phi,theta,psi,'b->v');
@@ -306,13 +303,9 @@ function [x_dot,d] = eqs_motion(t,x,input,param)
     n  = Tou(3);
     
     % Equation Matrices
-    Velocity                = [C_theta*C_psi,S_phi*S_theta*C_psi-C_phi*S_psi,C_phi*S_theta*C_psi+S_phi*S_psi;
-                               C_theta*S_psi,S_phi*S_theta*S_psi+C_phi*C_psi,C_phi*S_theta*S_psi-S_phi*C_psi;
-                               -S_theta,S_phi*C_theta,C_phi*C_theta];
     Acceleration            = [r*v-q*w;
                                p*w-r*u;
                                q*u-p*v];
-    Angular_Velocity        = R_bv12;
     Angular_Acceleration    = [Gamma(1)*p*q-Gamma(2)*q*r,Gamma(3)*l+Gamma(4)*n;
                                Gamma(5)*p*r-Gamma(6)*(p^2-r^2),1/Jy*m;
                                Gamma(7)*p*q-Gamma(1)*q*r,Gamma(4)*l+Gamma(8)*n];
@@ -321,9 +314,9 @@ function [x_dot,d] = eqs_motion(t,x,input,param)
     x_dot = zeros(length(x),1);
 
     % Equations of Motion
-    x_dot(1:3)   = Velocity*x(4:6);
+    x_dot(1:3)   = R_bv*x(4:6);
     x_dot(4:6)   = Acceleration+1/mass*[fx;fy;fz];
-    x_dot(7:9)   = Angular_Velocity*x(10:12);
+    x_dot(7:9)   = R_bv12*x(10:12);
     x_dot(10:12) = sum(Angular_Acceleration,2);
 end
 
@@ -484,20 +477,20 @@ function [y_r_out,y_r_dot_out] = get_y_r(z,x,d,param)
 end
 
 % y_m Conversion
-function y_m = get_y_m(z_f,param)
-    p_n=z_f(1);
-    p_e=z_f(2);
-    V_gh=z_f(4);
-    chi=z_f(5);
-    P_static=z_f(6);
-    P_dynamic=z_f(7);
-    psi=z_f(8);
-    a_x=z_f(9);
-    a_y=z_f(10);
-    a_z=z_f(11);
-    p=z_f(12);
-    q=z_f(13);
-    r=z_f(14);
+function y_m = get_y_m(z,param)
+    p_n=z(1);
+    p_e=z(2);
+    V_gh=z(4);
+    chi=z(5);
+    P_static=z(6);
+    P_dynamic=z(7);
+    psi=z(8);
+    a_x=z(9);
+    a_y=z(10);
+    a_z=z(11);
+    p=z(12);
+    q=z(13);
+    r=z(14);
     
     g = param.g;
     

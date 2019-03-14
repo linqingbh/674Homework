@@ -63,15 +63,15 @@ settings.show_hist   = true;
 settings.animation   = true;
 settings.plot        = true;
 settings.simulate    = true;
-settings.plot_names  = {%["p_{n} - Longitude (m)","p_{n}"];
+settings.plot_names  = {% ["p_{n} - Longitude (m)","p_{n}"];
 %                         ["p_{e} - Latitude (m)","p_{e}"];
 
-                        ["p_{d} - Altitude (m)","y_r_{h}","r_{h}"];
-                        ["\theta - Pitch (rad)","y_r_{\theta}","r_{\theta}"];
-                        ["\chi - Course (rad)","y_r_{\chi}","r_{\chi}"];
-                        ["\phi - Roll (rad)","y_r_{\phi}","r_{\phi}"];
-                        ["\beta - Sideslip (rad)","y_r_{\beta}","r_{\beta}"]
-                        ["V_a - Forward Velocity (m/s)","y_r_{V_a}","r_{V_a}"];
+%                         ["p_{d} - Altitude (m)","y_r_{h}","r_{h}"];
+%                         ["\theta - Pitch (rad)","y_r_{\theta}","r_{\theta}"];
+%                         ["\chi - Course (rad)","y_r_{\chi}","r_{\chi}"];
+%                         ["\phi - Roll (rad)","y_r_{\phi}","r_{\phi}"];
+%                         ["\beta - Sideslip (rad)","y_r_{\beta}","r_{\beta}"]
+%                         ["V_a - Forward Velocity (m/s)","y_r_{V_a}","r_{V_a}"];
                         
 %                         ["\delta_{a} - Ailorons (rad)","delta_a"];
 %                         ["\delta_{e} - Elevator (rad)","delta_e"];
@@ -102,9 +102,24 @@ settings.plot_names  = {%["p_{n} - Longitude (m)","p_{n}"];
 %                         ["\chi - Course (rad)","y_r_{\chi}","y_m_{\chi}"]
 %                         ["V_gh - Horizontal Velcoity (m/s)","y_r_{V_a}","y_m_{V_gh}"]
 
-%                           ["w_n - North Wind (m/s)","w_n"]
-%                           ["w_e - East Wind (m/s)","w_e"]
-%                           ["w_d - Down Wind (m/s)","w_d"]
+                        ["p_{n} - Longitude (m)","p_{n}","y_m_hat_{p_{n}}"];
+%                         ["p_{e} - Latitude (m)","p_{e}","y_m_{p_{e}}"];
+%                         ["h - Altitude (m)","p_{d}","y_m_{p_{d}}"];
+%                         ["u_a - Forward Velocity (m/s)","u","y_m_{u_a}"];
+%                         ["\phi - Roll (rad)","\phi","y_m_{\phi}"];
+%                         ["\theta - Pitch (rad)","\theta","y_m_{\theta}"];
+%                         ["\psi - Yaw (rad)","\psi","y_m_{\psi}"];
+%                         ["p - Roll Rate (rad\s)","p","y_m_{p}"];
+%                         ["q - Pitch Rate (rad\s)","q","y_m_{q}"];
+%                         ["r - Yaw Rate (rad\s)","r","y_m_{r}"];
+%                         ["\chi - Course (rad)","y_r_{\chi}","y_m_{\chi}"]
+%                         ["V_gh - Horizontal Velcoity (m/s)","y_r_{V_a}","y_m_{V_gh}"]
+
+%                         ["w_n - North Wind (m/s)","w_n"]
+%                         ["w_e - East Wind (m/s)","w_e"]
+%                         ["w_d - Down Wind (m/s)","w_d"]
+
+                          ["e - Estimator Error","x_hat_e_{p_{n}}","x_hat_e_{p_{e}}","x_hat_e_{p_{d}}","x_hat_e_{u}","x_hat_e_{v}","x_hat_e_{w}","x_hat_e_{\phi}","x_hat_e_{\theta}","x_hat_e_{\psi}","x_hat_e_{p}","x_hat_e_{q}","x_hat_e_{r}"]
                         };
                     
 % Display warnings?
@@ -120,7 +135,7 @@ core.publish("z",z_0s)
 core.publish("z_hat",z_0s)
 core.publish("y_m",y_m_0)
 core.publish("y_m_hat",y_m_0)
-core.publish("x_hat",x_0s)
+core.publish("x_hat",param.x_0)
 core.publish("d_hat",r_0s)
 core.publish("y_r",param.y_r_0)
 core.publish("y_r_hat",r_0s)
@@ -153,11 +168,11 @@ t_r_V = 3;
 zeta_V = 0.707;
 
 %% Sensors
-sense.exact = true;
+sense.perfect = false;
 sense.d_names = [];
 
 sense.type = sensors.GPS;
-sense.x_names = ["p_{n}";"p_{e}";"p_{d}"];
+sense.x_names = ["p_{n}";"p_{e}";"p_{d}";"u";"v";"w";"\phi";"\theta";"\psi"];
 sense.z_names = ["GPS_n";"GPS_e";"GPS_h";"GPS_Vg";"GPS_chi"];
 core.functions.sensors(1) = sensors(sense,param);
 
@@ -186,42 +201,24 @@ sense.x_names = ["p","q","r"];
 sense.z_names = ["RateGyro_p";"RateGyro_q";"RateGyro_r"];
 core.functions.sensors(6) = sensors(sense,param);
 
-%% State Observers
-observe.r_names = [];
-observe.m_names = [];
-observe.u_names = [];
-observe.d_names = [];
-observe.L = 1;
+%% Filter
+core.functions.filters = my_filter(1,0.5,set_indexes(core.functions.sensors,'z_indexes','sense',{param.x_0,functions.eqs_motion(0,param.x_0,param.u_0,param),[],0}),0); %#ok<NBRAK>
 
-observe.type = observers.exact;
-observe.x_names = ["p_{n}";"p_{e}";"p_{d}";"u";"v";"w";"\phi";"\theta";"\psi";"p";"q";"r"];
-core.functions.observers(1) = observers(observe,core);
+%% State Observers
 
 observe.type = observers.ekf;
-observe.x_names = ["p_{n}";"p_";"\psi";"q";"r"];
-observe.d_names = ["error_w_n";"error_w_e"];
-observe.u_names = ["u_a";"V_gh";"\chi"];
-observe.L.f = @(x_hat,y_m,r,u) [V_gh*cos(chi);
-                                V_gh*sin(chi);
-                                ((V_*cos(psi)+w_n)*(-V_a*psi_dot*sin(psi))+(V_a*sin(psi)+w_e)*(V_a*psi_dot*cos(psi)))/V_gh;
-                                param.g/V_gh*tan(phi);
-                                0;
-                                0;
-                                q*sin(phi)/cos(theta)+r*cos(phi)/cos(theta)];
-observe.L.A = @(x_hat,y_m,r,u) [0,0;0,0];
-observe.L.h = @(x_hat,y_m,r,u) [p_n;
-                                p_e;
-                                V_gh;
-                                chi;
-                                V_a*cos(psi)+w_n-V_gh*cos(chi);
-                                V_a*sin(psi)+w_e-V_gh*sin(chi)];
-observe.L.C = 
-core.functions.observers(2) = observers(observe,core);
+observe.x_names = ["p_{n}";"p_{e}";"p_{d}";"u";"v";"w";"\phi";"\theta";"\psi";"p";"q";"r"];
+observe.r_names = [];
+observe.m_names = ["p_{n}";"p_{e}";"p_{d}";"u_a";"\phi";"\theta";"\psi";"p";"q";"r";"\chi";"V_gh";"w_n";"w_e";"w_d"];
+observe.u_names = ["delta_a";"delta_e";"delta_r";"delta_t"];
+observe.d_names = [];
+observe.L.Q = my_cov(@(state) functions.eqs_motion(0,state,param.u_0,param),param.x_0);
+core.functions.observers(1) = observers(observe,core);
 
-observe.type = observers.pass;
-observe.d_names = "w_d";
-observe.m_names = "w_d";
-core.functions.disturbance_observers(2) = observers(observe,core);
+% observe.type = observers.pass;
+% observe.d_names = ["w_n","w_e","w_d"];
+% observe.m_names = ["w_n","w_e","w_d"];
+% core.functions.observers(2) = observers(observe,core);
 
 %% Controllers
 
