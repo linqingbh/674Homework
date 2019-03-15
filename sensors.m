@@ -213,6 +213,9 @@ classdef sensors < handle
             
             
             covariance_matrix = cov(y_m_hat-y_m);
+            covariance_matrix(end-2:end,:) = 0;
+            covariance_matrix(:,end-2:end) = 0;
+            covariance_matrix(end-2:end,end-2:end) = eye(3);
 %             bias_list = mean(z_hat-z,1).';
 %             
 %             for j = 1:length(sensors)

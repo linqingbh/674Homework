@@ -143,18 +143,24 @@ classdef observers < handle
                     x_hat = rk4(@(~,state) self.L.f(state,u),[self.t,t],self.x_hat);
                     %tic
                     % Long
-                    A = self.L.A(x,u);
+                    A = self.L.A(x_hat,u);
                     %toc
                     self.L.P = rk4(@(~,covariance) self.covariance(covariance,A),[self.t,t],self.L.P);
                     if any(y_m ~= self.position)
                         i = y_m~=self.position;
+                        y_m_hat = self.L.h(x_hat,u);
+                        
+                        % Thresholding to handle spikes in accelerometer
+%                         error = controllers.get_error(y_m_hat(i),y_m(i),self.m_is_angle(i))
+%                             
+%                         end
+                        
                         %tic
                         % Long
                         C = self.L.C(x_hat,u,i);
                         %toc
                         self.L.L = self.L.P*C.'*(self.L.R(i,i)+C*self.L.P*C.')^-1;
                         self.L.P = (eye(length(x_hat))-self.L.L*C)*self.L.P;
-                        y_m_hat = self.L.h(x_hat,u);
                         x_hat = x_hat + self.L.L*(controllers.get_error(y_m_hat(i),y_m(i),self.m_is_angle(i)));
                         self.position = y_m;
                     end

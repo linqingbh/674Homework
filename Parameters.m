@@ -382,6 +382,10 @@ function [x_dot,d] = eqs_motion(t,x,input,param)
     x_dot(7:9)   = R_bv12*x(10:12);
     x_dot(10:12) = sum(Angular_Acceleration,2);
     
+    if t >= 18
+        throw = 1;
+    end
+    
 end
 
 % Anamation Information
@@ -574,8 +578,8 @@ function y_m = get_y_m(z,param)
 %     end
     psi = psi - param.declination;
     
-    w_n = 0;%V_gh*cos(chi)-u_a*cos(psi);
-    w_e = 0;%V_gh*sin(chi)-u_a*sin(psi);
+    w_n = V_gh*cos(chi)-u_a*cos(psi);
+    w_e = V_gh*sin(chi)-u_a*sin(psi);
     w_d = 0;
 
     y_m(1,1) = p_n;
