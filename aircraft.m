@@ -186,7 +186,7 @@ function param = aircraft(name,param)
     P.C_r_delta_r = P.Gamma(4)*P.C_l_delta_r + P.Gamma(8)*P.C_n_delta_r;
     
     param.aircraft = P;
-%     for fn = fieldnames(P)'
-%        param.(fn{1}) = P.(fn{1});
-%     end
+    for fn = fieldnames(P)'
+       param.(fn{1}) = P.(fn{1});
+    end
 end

@@ -45,7 +45,7 @@ param.take_off_pitch = 15*pi/180;
 param.d_names = ["w_n";"w_e";"w_d";"w_n_dot";"w_e_dot";"w_d_dot"];
 param.x_names = ["p_{n}";"p_{e}";"p_{d}";"u";"v";"w";"\phi";"\theta";"\psi";"p";"q";"r"];
 param.z_names = ["GPS_n";"GPS_e";"GPS_h";"GPS_Vg";"GPS_chi";"Bar";"Pito";"Comp";"Accel_x";"Accel_y";"Accel_z";"RateGyro_p";"RateGyro_q";"RateGyro_r"];
-param.m_names = ["p_{n}";"p_{e}";"p_{d}";"u_a";"\phi";"\theta";"\psi";"p";"q";"r";"\chi";"V_gh";"w_n";"w_e";"w_d"];
+param.m_names = ["p_{n}";"p_{e}";"p_{d}";"u_a";"Accel_x";"Accel_y";"Accel_z";"\psi";"p";"q";"r";"\chi";"V_gh";"w_n";"w_e";"w_d"];
 param.r_names = ["\chi";"\phi";"h";"\theta";"\beta";"V_a"];
 param.u_names = ["delta_a";"delta_e";"delta_r";"delta_t"];
 
@@ -63,7 +63,7 @@ param.D_in_param.bias    = 0.0.*[];
 % Wind
 base = [0;0;0];
 gust = wind.steady;
-param.wind = wind(gust,base,param.aircraft.V_design);
+param.wind = wind(gust,base,param.V_design);
 
 % Magnetic
 param.declination = 2.9*pi/180;
@@ -94,7 +94,7 @@ param.tail_h = 0.1*scale;
 % Simulation
 settings.start       = 0;      % s
 settings.step        = 0.02;   % s
-settings.end         = 2;     % s
+settings.end         = 30;     % s
 t = settings.start:settings.step:settings.end;
 
 settings.playback_rate  = 1;
@@ -217,15 +217,78 @@ function [x_dot,d] = eqs_motion(t,x,input,param)
     delta_r = input(3);
     delta_t = input(4);
     % Aircraft parameters
-    my_unpack(param.aircraft)
+    % my_unpack(param.aircraft)
+    
+    %physical parameters of airframe
+    mass = param.mass;
+    Jy   = param.Jy;
+    M    = param.M;% Dimensions
+    c    = param.c;
+    b    = param.b;
+    S_wing    = param.S_wing;
+    AR   = b^2/S_wing;
+    alpha_0     = param.alpha_0; % Aerodynamics
+    C_L_0       = param.C_L_0;
+    C_L_alpha   = param.C_L_alpha;
+    C_L_q       = param.C_L_q;
+    C_L_delta_e = param.C_L_delta_e;
+    C_D_p       = param.C_D_p;
+    C_D_q       = param.C_D_q;
+    C_D_delta_e = param.C_D_delta_e;
+    C_Y_0       = param.C_Y_0;
+    C_Y_beta    = param.C_Y_beta;
+    C_Y_p       = param.C_Y_p;
+    C_Y_r       = param.C_Y_r;
+    C_Y_delta_a = param.C_Y_delta_a;
+    C_Y_delta_r = param.C_Y_delta_r;
+    e           = param.e;
+    C_l_0       = param.C_l_0; % Stability
+    C_l_beta    = param.C_l_beta;
+    C_l_p       = param.C_l_p;
+    C_l_r       = param.C_l_r;
+    C_l_delta_a = param.C_l_delta_a;
+    C_l_delta_r = param.C_l_delta_r;
+    C_m_0       = param.C_m_0;
+    C_m_alpha   = param.C_m_alpha;
+    C_m_q       = param.C_m_q;
+    C_m_delta_e = param.C_m_delta_e;
+    C_n_0       = param.C_n_0;
+    C_n_beta    = param.C_n_beta;
+    C_n_p       = param.C_n_p;
+    C_n_r       = param.C_n_r;
+    C_n_delta_a = param.C_n_delta_a;
+    C_n_delta_r = param.C_n_delta_r;
+    S_prop      = param.S_prop; % Motor
+    C_prop      = param.C_prop;
+    k_motor     = param.k_motor;
+    k_T_P       = param.k_T_P;
+    k_Omega     = param.k_Omega;     
+    
+    Gamma = param.Gamma;
+    
     % Trig
     S_phi = sin(phi);
+    C_phi = cos(phi);
     S_theta = sin(theta);
     C_theta = cos(theta);
+    T_theta = tan(theta);
+    S_psi = sin(psi);
+    C_psi = cos(psi);
     % Rotations
-    R_vb = get_rotation(phi,theta,psi,'v->b');
-    R_bv = get_rotation(phi,theta,psi,'b->v');
-    R_bv12 = get_rotation(phi,theta,psi,'b->v12');
+    R_bv2 = [1,0,0;
+             0,C_phi,-S_phi;
+             0,S_phi,C_phi];
+    R_v2v1 = [C_theta,0,S_theta;
+              0,1,0;
+              -S_theta,0,C_theta];
+    R_v1v = [C_psi,-S_psi,0;
+             S_psi,C_psi,0;
+             0,0,1];
+    R_bv = R_v1v*R_v2v1*R_bv2;
+    R_vb = R_bv.';
+    R_bv12 = [1,S_phi*T_theta,C_phi*T_theta;
+              0,C_phi,-S_phi;
+              0,S_phi/C_theta,C_phi/C_theta];
     
     % Disturbance ---------------------------------------------------------
     
@@ -501,12 +564,13 @@ function y_m = get_y_m(z,param)
     
     u_a = sqrt(2/air.rho*P_dynamic);
     
-    phi = atan2(-a_y,-a_z);
-    try
-        theta = atan2(a_x,sqrt(g^2-a_x^2));
-    catch
-        throw =1;
-    end
+%     phi = atan2(-a_y,-a_z);
+%     try
+%         theta = atan2(a_x,sqrt(g^2-a_x^2));
+%     catch
+%         theta = asin(a_x/g);
+%         warning("Acceleration in the x direction is %f",a_x)
+%     end
     psi = psi - param.declination;
     
     error_w_n = 0;
@@ -517,17 +581,18 @@ function y_m = get_y_m(z,param)
     y_m(2,1) = p_e;
     y_m(3,1) = p_d;
     y_m(4,1) = u_a;
-    y_m(5,1) = phi;
-    y_m(6,1) = theta;
-    y_m(7,1) = psi;
-    y_m(8,1) = p;
-    y_m(9,1) = q;
-    y_m(10,1) = r;
-    y_m(11,1) = chi;
-    y_m(12,1) = V_gh;
-    y_m(13,1) = error_w_n; 
-    y_m(14,1) = error_w_e;
-    y_m(15,1) = w_d;
+    y_m(5,1) = a_x;
+    y_m(6,1) = a_y;
+    y_m(7,1) = a_z;
+    y_m(8,1) = psi;
+    y_m(9,1) = p;
+    y_m(10,1) = q;
+    y_m(11,1) = r;
+    y_m(12,1) = chi;
+    y_m(13,1) = V_gh;
+    y_m(14,1) = w_n; 
+    y_m(15,1) = w_e;
+    y_m(16,1) = w_d;
 end
 
 % Other Functions

@@ -22,7 +22,7 @@ classdef sensors < handle
         y_m
         
         % Gps Specific Values
-        k_gps = 1/1600;
+        k_gps = 1/1100;
         nu = [0;0;0];
     end
     
@@ -50,23 +50,23 @@ classdef sensors < handle
                 case self.GPS
                     self.sensor_function = @self.execute_GPS;
                     self.eta = @self.gps_error;
-                    self.sigma = [2.1;2.1;4.0];
+                    self.sigma = [0.21;0.21;0.40];
                     self.update_rate = 1;
                 case self.Bar
                     self.sensor_function = @self.execute_Bar;
                     self.sigma = 10;
-                    self.beta = 125;
+                    self.beta = 0;
                     self.sat_lim.high = 100000;
                     self.sat_lim.low = 0;
                 case self.Pito
                     self.sensor_function = @self.execute_Pito;
                     self.sigma = 2;
-                    self.beta = 20;
+                    self.beta = 0;
                     self.sat_lim.high = 4000;
                     self.sat_lim.low = 0;
                 case self.Comp
                     self.sensor_function = @self.execute_Comp;
-                    self.sigma = 0.3*pi/180;
+                    self.sigma = 0.03*pi/180;
                     self.beta = 1*pi/180+param.declination;
                     self.update_rate = 8;
                 case self.Accel
@@ -76,7 +76,7 @@ classdef sensors < handle
                     self.sat_lim.low = -6*9.81;
                 case self.RateGyro
                     self.sensor_function = @self.execute_RateGyro;
-                    self.sigma = 0.0023;
+                    self.sigma = 0.13*pi/180;
                     self.sat_lim.high = 350*pi/180;
                     self.sat_lim.low = -350*pi/180;
                 case self.Exact
@@ -92,7 +92,7 @@ classdef sensors < handle
         end
 
         function nu = gps_error(self,measurement)
-            nu = exp(-self.k_gps.*self.update_rate).*self.nu + self.sigma.*randn(3,1);
+            nu = exp(-self.k_gps.*1./self.update_rate).*self.nu + self.sigma.*randn(3,1);
             self.nu = nu;
             nu(4) = self.sigma(1).*randn;
             nu(5) = self.sigma(1).*randn./measurement(4);
@@ -119,6 +119,9 @@ classdef sensors < handle
             truth = self.sensor_function(x,x_dot,d);
             
             if dt >= 1/self.update_rate
+                if length(truth) == 5 && t > 0
+                    throw =1;
+                end
                 
                 % Saturate
                 sat_truth = min(truth,self.sat_lim.high);
@@ -189,12 +192,15 @@ classdef sensors < handle
         
         % Calibration -----------------------------------------------------
         function [covariance_matrix,bias_list] = callibrate_sensors(sensors,x,iterations)
-            if ~exist('iterations','var'),iterations = 1000;end
+            if ~exist('iterations','var'),iterations = 100;end
             
             for i = 1:iterations
                 for j = 1:length(sensors)
-                    [z(i,sensors(j).z_indexes),z_hat(i,sensors(j).z_indexes)] = sensors(j).sense(x,zeros(size(x)),[],0); %#ok<AGROW>
-                    sensors(j).last_update = -Inf;
+                    last_update = sensors(j).last_update;
+                    last_reading = sensors(j).y_m;
+                    [z(i,sensors(j).z_indexes),z_hat(i,sensors(j).z_indexes)] = sensors(j).sense(x,zeros(size(x)),[],sensors(j).last_update+1/sensors(j).update_rate); %#ok<AGROW>
+                    sensors(j).last_update = last_update;
+                    sensors(j).y_m = last_reading;
                 end
             end
             
@@ -203,7 +209,7 @@ classdef sensors < handle
             
             for j = 1:length(sensors)
                 sensors(j).sigma_hat = sqrt(diag(covariance_matrix(sensors(j).z_indexes,sensors(j).z_indexes)));
-                sensors(j).beta_hat = bias_list(sensors(j).z_indexes);
+                %sensors(j).beta_hat = bias_list(sensors(j).z_indexes);
             end
             
         end

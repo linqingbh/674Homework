@@ -5,6 +5,8 @@ classdef system_solver < handle
         C
         D
         I
+        y
+        y_dot
         x
         x_dot
         time = 0;
@@ -33,6 +35,8 @@ classdef system_solver < handle
             end
             self.I = eye(length(self.x));
             self.x_dot = self.A*self.x;
+            self.y = self.C*self.x;
+            self.y_dot = self.C*self.x_dot;
         end
         
         function [y,x,x_dot,y_dot] = propigate(self,u,t)
@@ -53,6 +57,8 @@ classdef system_solver < handle
             y = self.C*x + self.D*u;
             y_dot = self.C*x_dot;
             
+            self.y = x;
+            self.y_dot = x_dot;
             self.x = x;
             self.x_dot = x_dot;
         end

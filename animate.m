@@ -178,6 +178,7 @@ classdef animate < handle
                     self.core.subscribe_history('x');
                     self.core.subscribe_history('x_dot');
                     self.core.subscribe_history('z');
+                    self.core.subscribe_history('z_f');
                     self.core.subscribe_history('z_hat');
                     self.core.subscribe_history('y_m');
                     self.core.subscribe_history('y_m_hat');
@@ -208,6 +209,7 @@ classdef animate < handle
                          self.param.x_names;
                          self.param.x_names + "_{dot}";
                          self.param.z_names;
+                         "z_f_{" + self.param.z_names + "}";
                          "z_hat_{" + self.param.z_names + "}";
                          "y_m_{" + self.param.m_names + "}";
                          "y_m_hat_{" + self.param.m_names + "}";
