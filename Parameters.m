@@ -374,13 +374,14 @@ function [x_dot,d] = eqs_motion(t,x,input,param)
                                Gamma(7)*p*q-Gamma(1)*q*r,Gamma(4)*l+Gamma(8)*n];
                                
     % Initialize
-    x_dot = zeros(length(x),1);
+    x_dot = zeros(12,1);
 
     % Equations of Motion
     x_dot(1:3)   = R_bv*x(4:6);
     x_dot(4:6)   = Acceleration+1/mass*[fx;fy;fz];
     x_dot(7:9)   = R_bv12*x(10:12);
     x_dot(10:12) = sum(Angular_Acceleration,2);
+    
 end
 
 % Anamation Information
@@ -573,8 +574,8 @@ function y_m = get_y_m(z,param)
 %     end
     psi = psi - param.declination;
     
-    error_w_n = 0;
-    error_w_e = 0;
+    w_n = 0;%V_gh*cos(chi)-u_a*cos(psi);
+    w_e = 0;%V_gh*sin(chi)-u_a*sin(psi);
     w_d = 0;
 
     y_m(1,1) = p_n;

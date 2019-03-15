@@ -54,7 +54,7 @@ square3 = function_generator(input,period,amplitude,offset,phase_delay,t);
 r = [square1*pi;line;square2*50+100;line;line;square3*10+param.trim.V_a];
 
 %% Simulation Parameters
-settings.active_fig  = 1;
+settings.active_fig  = 3;
 settings.show_hist   = true;
 settings.animation   = true;
 settings.plot        = true;
@@ -116,20 +116,35 @@ settings.plot_names  = {% ["p_{n} - Longitude (m)","p_{n}"];
 %                         ["w_e - East Wind (m/s)","w_e"]
 %                         ["w_d - Down Wind (m/s)","w_d"]
 
-                          ["e - Estimator Error";
+                          ["e - Estimator Position Error";
                           "x_hat_e_{p_{n}}";
                           "x_hat_e_{p_{e}}";
-                          "x_hat_e_{p_{d}}";
+                          "x_hat_e_{p_{d}}"
+                          ].'
+                          
+                          ["e - Estimator Velocity Error";
                           "x_hat_e_{u}";
                           "x_hat_e_{v}";
-                          "x_hat_e_{w}";
+                          "x_hat_e_{w}"
+                          ].'
+                          
+                          ["e - Estimator Angle Error";
                           "x_hat_e_{\phi}";
                           "x_hat_e_{\theta}";
-                          "x_hat_e_{\psi}";
+                          "x_hat_e_{\psi}"
+                          ].'
+                          
+                          ["e - Estimator Angular Rate Error";
                           "x_hat_e_{p}";
                           "x_hat_e_{q}";
                           "x_hat_e_{r}"
                           ].'
+
+                          ["e_d - Disturbance Estimator Error";
+                          "d_hat_{w_n}";
+                          "d_hat_{w_e}";
+                          "d_hat_{w_d}";
+                          ].';
                         };
                     
 % Display warnings?
@@ -224,7 +239,7 @@ core.publish_specific("y_m",y_m_0,1)
 core.publish_specific("y_m_hat",y_m_0,1)
 
 %% Filter
-core.functions.filters = my_filter(0,0.85,z_0);
+core.functions.filters = my_filter([0,0,1,1,1,1,1,1,4,4,4,4,4,4],[0.999,0.999,0.8,0.999,0.999,0.8,0.8,0.8,0.6,0.6,0.6,0.6,0.6,0.6],z_0);
 core.functions.filters.update_every_step = false;
 
 %% State Observers
@@ -235,22 +250,25 @@ observe.r_names = [];
 observe.z_names = param.z_names;
 observe.m_names = param.m_names;
 observe.u_names = ["delta_a";"delta_e";"delta_r";"delta_t"];
-observe.d_names = [];%"w_n";"w_e";"w_d"];
+observe.d_names = ["w_n";"w_e";"w_d"];
+        % n   e   d   u    v    w
+gains = [100,100,0.1,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01;
+         100,100,0.1,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01;
+         0.1,0.1,0.1,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01;
+         0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01;
+         0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01;
+         0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01;
+         0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01;
+         0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01;
+         0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01;
+         0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01;
+         0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01;
+         0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01;
+         0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01;
+         0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01;
+         0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01;];
 
-gains = [10,10,10,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01;
-         10,10,10,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01;
-         10,10,10,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01;
-         0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01;
-         0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01;
-         0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01;
-         0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01;
-         0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01;
-         0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01;
-         0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01;
-         0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01;
-         0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01];
-
-observe.L.Q = my_cov(@(state) functions.eqs_motion(0,state,param.u_0,param),param.x_0).*gains;%,zeros(length(param.x_names),3);zeros(3,length(param.x_names)),zeros(3,3)];
+observe.L.Q = [my_cov(@(state) functions.eqs_motion(0,state,param.u_0,param),param.x_0),zeros(length(param.x_names),3);zeros(3,length(param.x_names)),eye(3)].*gains;
 core.functions.observers(1) = observers(observe,core);
 
 % observe.type = observers.pass;
@@ -389,3 +407,4 @@ end
 Simulation;
 
 % profile viewer
+

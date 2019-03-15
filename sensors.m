@@ -191,26 +191,34 @@ classdef sensors < handle
         end
         
         % Calibration -----------------------------------------------------
-        function [covariance_matrix,bias_list] = callibrate_sensors(sensors,x,iterations)
+        function [covariance_matrix,bias_list] = callibrate_sensors(core,x,iterations)
             if ~exist('iterations','var'),iterations = 100;end
+            
+            sensors = core.functions.sensors;
+            get_y_m = core.functions.get_y_m;
+            param = core.param;
             
             for i = 1:iterations
                 for j = 1:length(sensors)
                     last_update = sensors(j).last_update;
                     last_reading = sensors(j).y_m;
-                    [z(i,sensors(j).z_indexes),z_hat(i,sensors(j).z_indexes)] = sensors(j).sense(x,zeros(size(x)),[],sensors(j).last_update+1/sensors(j).update_rate); %#ok<AGROW>
+                    [z(sensors(j).z_indexes,i),z_hat(sensors(j).z_indexes,i)] = sensors(j).sense(x,zeros(size(x)),[],sensors(j).last_update+1/sensors(j).update_rate); %#ok<AGROW>
                     sensors(j).last_update = last_update;
                     sensors(j).y_m = last_reading;
                 end
+                y_m(i,:) = get_y_m(z(:,i),param);
+                y_m_hat(i,:) = get_y_m(z_hat(:,i),param);
             end
             
-            covariance_matrix = cov(z_hat-z);
-            bias_list = mean(z_hat-z,1).';
             
-            for j = 1:length(sensors)
-                sensors(j).sigma_hat = sqrt(diag(covariance_matrix(sensors(j).z_indexes,sensors(j).z_indexes)));
-                %sensors(j).beta_hat = bias_list(sensors(j).z_indexes);
-            end
+            
+            covariance_matrix = cov(y_m_hat-y_m);
+%             bias_list = mean(z_hat-z,1).';
+%             
+%             for j = 1:length(sensors)
+%                 sensors(j).sigma_hat = sqrt(diag(covariance_matrix(sensors(j).z_indexes,sensors(j).z_indexes)));
+%                 %sensors(j).beta_hat = bias_list(sensors(j).z_indexes);
+%             end
             
         end
     end

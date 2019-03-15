@@ -23,6 +23,7 @@ classdef observers < handle
         % Settings
         type
         m_is_angle
+        x_is_angle
         
         % Defaults
         t = 0;
@@ -48,15 +49,15 @@ classdef observers < handle
             self.param = param;
             
             % Functions of Import
-            observe.L.f = @(x,u) [functions.eqs_motion(0,x,u,param)];%;0;0;0];
+            observe.L.f = @(x,u) [functions.eqs_motion(0,x(1:length(observe.x_names)),u,param);0;0;0];
             observe.L.h = @(x,u) functions.get_y_m(set_indexes(functions.sensors,'z_indexes','sense',{x,functions.eqs_motion(0,x,u,param),[],0}),param);
 %             observe.L.h = @(x,u) set_indexes(functions.sensors,'z_indexes','sense',{x,functions.eqs_motion(0,x,u,param),[],0});
             observe.L.A = @(x,u) numerical_jacobian(@(state) self.L.f(state,u),x);
             observe.L.B = @(x,u) numerical_jacobian(@(input) self.L.f(x,input),u);
             observe.L.C = @(x,u,indexes) numerical_jacobian(@(state) self.L.h(state,u),x,0.01,indexes);
             observe.L.D = @(x,u) numerical_jacobian(@(input) self.L.h(x,input),u);
-            observe.L.P = zeros(length(param.x_0));%+3);
-            observe.L.R = sensors.callibrate_sensors(functions.sensors,param.x_0);
+            observe.L.P = zeros(length(observe.x_names)+length(observe.d_names));
+            observe.L.R = sensors.callibrate_sensors(core,param.x_0);
             
             % Param
             self.L = observe.L;
@@ -80,6 +81,7 @@ classdef observers < handle
             % Settings
             self.type = observe.type;
             self.m_is_angle = param.m_is_angle(self.m_indexes);  
+            self.x_is_angle = param.x_is_angle(self.x_indexes); 
 
             % Observer Specific
             switch self.type
@@ -153,7 +155,7 @@ classdef observers < handle
                         self.L.L = self.L.P*C.'*(self.L.R(i,i)+C*self.L.P*C.')^-1;
                         self.L.P = (eye(length(x_hat))-self.L.L*C)*self.L.P;
                         y_m_hat = self.L.h(x_hat,u);
-                        x_hat = x_hat + self.L.L*(y_m(i)-y_m_hat(i));
+                        x_hat = x_hat + self.L.L*(controllers.get_error(y_m_hat(i),y_m(i),self.m_is_angle(i)));
                         self.position = y_m;
                     end
             end
