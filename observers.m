@@ -27,6 +27,10 @@ classdef observers < handle
         
         % Defaults
         t = 0;
+        
+        % Throw
+        saved_A
+        saved_C
     end
     
     properties (Constant)
@@ -49,14 +53,13 @@ classdef observers < handle
             self.param = param;
             
             % Functions of Import
-            observe.L.f = @(x,u) [functions.eqs_motion(0,x(1:length(observe.x_names)),u,param);0;0;0];
+            observe.L.f = @(x,u) functions.eqs_motion(0,x(1:length(observe.x_names)),u,param);
             observe.L.h = @(x,u) functions.get_y_m(set_indexes(functions.sensors,'z_indexes','sense',{x,functions.eqs_motion(0,x,u,param),[],0}),param);
-%             observe.L.h = @(x,u) set_indexes(functions.sensors,'z_indexes','sense',{x,functions.eqs_motion(0,x,u,param),[],0});
-            observe.L.A = @(x,u) numerical_jacobian(@(state) self.L.f(state,u),x);
-            observe.L.B = @(x,u) numerical_jacobian(@(input) self.L.f(x,input),u);
-            observe.L.C = @(x,u,indexes) numerical_jacobian(@(state) self.L.h(state,u),x,0.01,indexes);
-            observe.L.D = @(x,u) numerical_jacobian(@(input) self.L.h(x,input),u);
-            observe.L.P = zeros(length(observe.x_names)+length(observe.d_names));
+            observe.L.A = @(x,u) numerical_jacobian(@(state) self.L.f(state,u),x,[],[],[],param.x_is_angle);
+            observe.L.B = @(x,u) numerical_jacobian(@(input) self.L.f(x,input),u,[],[],[],param.x_is_angle);
+            observe.L.C = @(x,u,indexes) numerical_jacobian(@(state) self.L.h(state,u),x,[],[],indexes,param.m_is_angle);
+            observe.L.D = @(x,u) numerical_jacobian(@(input) self.L.h(x,input),u,[],[],[],param.m_is_angle);
+            observe.L.P = zeros(length(observe.x_names));
             observe.L.R = sensors.callibrate_sensors(core,param.x_0);
             
             % Param
@@ -92,6 +95,7 @@ classdef observers < handle
                 case self.ekf
 %                     self.position = z(self.z_indexes);
             end
+            
         end
         
         % Luenberger Observer ---------------------------------------------
@@ -119,7 +123,6 @@ classdef observers < handle
             r   = r(self.r_indexes);
             u   = u(self.u_indexes);
             
-            %tic
             % Obtain measurment
             switch self.type
                 case self.pass
@@ -141,31 +144,18 @@ classdef observers < handle
                     x_hat = self.velocity;
                 case self.ekf
                     x_hat = rk4(@(~,state) self.L.f(state,u),[self.t,t],self.x_hat);
-                    %tic
-                    % Long
                     A = self.L.A(x_hat,u);
-                    %toc
                     self.L.P = rk4(@(~,covariance) self.covariance(covariance,A),[self.t,t],self.L.P);
                     if any(y_m ~= self.position)
                         i = y_m~=self.position;
                         y_m_hat = self.L.h(x_hat,u);
-                        
-                        % Thresholding to handle spikes in accelerometer
-%                         error = controllers.get_error(y_m_hat(i),y_m(i),self.m_is_angle(i))
-%                             
-%                         end
-                        
-                        %tic
-                        % Long
                         C = self.L.C(x_hat,u,i);
-                        %toc
-                        self.L.L = self.L.P*C.'*(self.L.R(i,i)+C*self.L.P*C.')^-1;
-                        self.L.P = (eye(length(x_hat))-self.L.L*C)*self.L.P;
-                        x_hat = x_hat + self.L.L*(controllers.get_error(y_m_hat(i),y_m(i),self.m_is_angle(i)));
+                        K = self.L.P*C.'/(self.L.R(i,i)+C*self.L.P*C.');
+                        self.L.P = (eye(length(x_hat))-K*C)*self.L.P;
+                        x_hat = x_hat + K*(controllers.get_error(y_m_hat(i),y_m(i),self.m_is_angle(i)));
                         self.position = y_m;
                     end
             end
-            %toc
             
             % Save Values
             self.t = t;

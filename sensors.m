@@ -50,7 +50,7 @@ classdef sensors < handle
                 case self.GPS
                     self.sensor_function = @self.execute_GPS;
                     self.eta = @self.gps_error;
-                    self.sigma = [0.21;0.21;0.40];
+                    self.sigma = [0.21;0.21;0.40;0.05];
                     self.update_rate = 1;
                 case self.Bar
                     self.sensor_function = @self.execute_Bar;
@@ -68,7 +68,6 @@ classdef sensors < handle
                     self.sensor_function = @self.execute_Comp;
                     self.sigma = 0.03*pi/180;
                     self.beta = 1*pi/180+param.declination;
-                    self.update_rate = 8;
                 case self.Accel
                     self.sensor_function = @self.execute_Accel;
                     self.sigma = 0.0025*9.81;
@@ -86,16 +85,16 @@ classdef sensors < handle
             if sense.perfect
                 self.sat_lim.high = Inf;
                 self.sat_lim.low = -Inf;
-                self.sigma = 0;
-                self.beta = 0;
+                self.sigma = zeros(size(self.sigma));
+                self.beta = zeros(size(self.beta));
             end
         end
 
-        function nu = gps_error(self,measurement)
-            nu = exp(-self.k_gps.*1./self.update_rate).*self.nu + self.sigma.*randn(3,1);
+        function nu = gps_error(self,~)
+            nu = exp(-self.k_gps.*1./self.update_rate).*self.nu + self.sigma(1:3).*randn(3,1);
             self.nu = nu;
-            nu(4) = self.sigma(1).*randn;
-            nu(5) = self.sigma(1).*randn./measurement(4);
+            nu(4) = self.sigma(4).*randn;
+            nu(5) = self.sigma(4).*randn./10;
             
         end
         
@@ -191,7 +190,7 @@ classdef sensors < handle
         end
         
         % Calibration -----------------------------------------------------
-        function [covariance_matrix,bias_list] = callibrate_sensors(core,x,iterations)
+        function covariance_matrix = callibrate_sensors(core,x,iterations)
             if ~exist('iterations','var'),iterations = 100;end
             
             sensors = core.functions.sensors;
@@ -212,16 +211,13 @@ classdef sensors < handle
             
             
             
-            covariance_matrix = cov(y_m_hat-y_m);
-            covariance_matrix(end-2:end,:) = 0;
-            covariance_matrix(:,end-2:end) = 0;
-            covariance_matrix(end-2:end,end-2:end) = eye(3);
-%             bias_list = mean(z_hat-z,1).';
-%             
-%             for j = 1:length(sensors)
-%                 sensors(j).sigma_hat = sqrt(diag(covariance_matrix(sensors(j).z_indexes,sensors(j).z_indexes)));
-%                 %sensors(j).beta_hat = bias_list(sensors(j).z_indexes);
-%             end
+            covariance_matrix = cov(y_m_hat);
+            bias_list = mean(z_hat-z,2);
+            
+            for j = 1:length(sensors)
+                
+                sensors(j).beta_hat = bias_list(sensors(j).z_indexes);
+            end
             
         end
     end

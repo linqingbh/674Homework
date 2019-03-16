@@ -7,6 +7,7 @@ clear all
 clc
 
 % profile on
+rng('default')
 
 % Add Path
 Parameters;
@@ -54,9 +55,9 @@ square3 = function_generator(input,period,amplitude,offset,phase_delay,t);
 r = [square1*pi;line;square2*50+100;line;line;square3*10+param.trim.V_a];
 
 %% Simulation Parameters
-settings.active_fig  = 3;
+settings.active_fig  = 2;
 settings.show_hist   = true;
-settings.animation   = true;
+settings.animation   = false;
 settings.plot        = true;
 settings.simulate    = true;
 settings.progress_update = true;
@@ -116,35 +117,33 @@ settings.plot_names  = {% ["p_{n} - Longitude (m)","p_{n}"];
 %                         ["w_e - East Wind (m/s)","w_e"]
 %                         ["w_d - Down Wind (m/s)","w_d"]
 
-                          ["e - Estimator Position Error";
+                          ["e - Position Error (m)";
                           "x_hat_e_{p_{n}}";
                           "x_hat_e_{p_{e}}";
                           "x_hat_e_{p_{d}}"
                           ].'
                           
-                          ["e - Estimator Velocity Error";
+                          ["e - Velocity Error (m/s)";
                           "x_hat_e_{u}";
                           "x_hat_e_{v}";
                           "x_hat_e_{w}"
                           ].'
                           
-                          ["e - Estimator Angle Error";
+                          ["e - Angle Error (rad)";
                           "x_hat_e_{\phi}";
                           "x_hat_e_{\theta}";
                           "x_hat_e_{\psi}"
                           ].'
                           
-                          ["e - Estimator Angular Rate Error";
+                          ["e - Angular Rate Error (rad/s)";
                           "x_hat_e_{p}";
                           "x_hat_e_{q}";
                           "x_hat_e_{r}"
                           ].'
 
-                          ["e_d - Disturbance Estimator Error";
-                          "d_hat_{w_n}";
-                          "d_hat_{w_e}";
-                          "d_hat_{w_d}";
-                          ].';
+                          ["w_n - North Wind","y_m_{w_n}","y_m_hat_{w_n}"];
+                          ["w_e - East Wind","y_m_{w_e}","y_m_hat_{w_e}"];
+%                           ["w_d - Down Wind","y_m_{w_d}","y_m_hat_{w_d}"];
                           
 %                          ["a - Accelormeter (m\s^{2})","z_f_{Accel_x}","z_f_{Accel_y}","z_f_{Accel_z}"];
 %                          ["Omega_dot - Rate Gyro (rad/s)","p","q","r"]
@@ -246,7 +245,7 @@ core.publish_specific("y_m_hat",y_m_0,1)
 %% Filter
 core.functions.filters = my_filter([0,... GPS_n
                                     0,... GPS_e
-                                    1,... GPS_h
+                                    0,... GPS_h
                                     0,... GPS_Vg
                                     0,... GPS_chi
                                     1,... Bar
@@ -258,11 +257,11 @@ core.functions.filters = my_filter([0,... GPS_n
                                     10,... RateGyro_p
                                     10,... RateGyro_q
                                     10],...RateGyro_r
-                                    [0.999,... GPS_n
-                                     0.999,... GPS_e
-                                     0.8,...   GPS_h
-                                     0.999,... GPS_Vg
-                                     0.999,... GPS_chi
+                                    [0.9,... GPS_n
+                                     0.9,... GPS_e
+                                     0.9,...   GPS_h
+                                     0.9,... GPS_Vg
+                                     0.9,... GPS_chi
                                      0.8,...   Bar
                                      0.8,...   Pito
                                      0.8,...   Comp
@@ -283,30 +282,22 @@ observe.r_names = [];
 observe.z_names = param.z_names;
 observe.m_names = param.m_names;
 observe.u_names = param.u_names;
-observe.d_names = param.d_names(1:3);
-        %p_n;p_e;p_d;   u;   u;   w; phi;theta;psi;   p;   q;   r; w_n; w_e; w_d
-gains = [100,100,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01;    % P_n
-         100,100,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01;    % P_e
-         0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01;  % P_d
-         0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01;  % u
-         0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01;  % v
-         0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01;  % w
-         0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01;  % phi
-         0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01;  % theta
-         0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01;  % psi
-         0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01;  % p
-         0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01;  % q
-         0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01;  % r
-         0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,100,100,100;  % w_n
-         0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,100,100,100;  % w_e
-         0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,100,100,100;];% w_d
+observe.d_names = [];
+        %p_n;p_e;p_d;   u;   u;   w; phi;theta;psi;   p;   q;   r;
+gains = [100,100,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01;    % P_n
+         100,100,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01;    % P_e
+         0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01;  % P_d
+         0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01;  % u
+         0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01;  % v
+         0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01;  % w
+         0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01;  % phi
+         0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01;  % theta
+         0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01;  % psi
+         0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01;  % p
+         0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01;  % q
+         0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01]; % r
 
-%gains = ones(length(param.x_names)+3) - eye(length(param.x_names)+3) +eye(length(param.x_names)+3)*...
-%        [100;100;0.01;0.01;0.01;0.01;0.01;0.01;0.01;0.01;0.01;0.01;0.01;0.01;0.01];
-
-% gains = ones(length(param.x_names)+3);%*0.01;
-
-observe.L.Q = [my_cov(@(state) functions.eqs_motion(0,state,param.u_0,param),param.x_0)].*gains;%,zeros(length(param.x_names),3);zeros(3,length(param.x_names)),ones(3)].*gains;
+observe.L.Q = (my_cov(@(state) functions.eqs_motion(0,state,param.u_0,param),param.x_0)).*gains;
 core.functions.observers(1) = observers(observe,core);
 
 % observe.type = observers.pass;

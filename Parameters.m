@@ -50,7 +50,7 @@ param.r_names = ["\chi";"\phi";"h";"\theta";"\beta";"V_a"];
 param.u_names = ["delta_a";"delta_e";"delta_r";"delta_t"];
 
 param.x_is_angle = [false;false;false;false;false;false;true;true;true;false;false;false];
-param.m_is_angle = [false;false;false;false;true;true;true;false;false;false;false;false;false;false;false;false];
+param.m_is_angle = [false;false;false;false;false;false;false;true;false;false;false;true;false;false;false;false];
 param.r_is_angle = [true;true;false;true;true;false];
 
 %% Uncertainty
@@ -100,7 +100,7 @@ t = settings.start:settings.step:settings.end;
 settings.playback_rate  = 1;
 settings.window         = [-1000,1000,-1000,1000,0,200]; % m
 settings.view           = [45,45];
-settings.gph_per_img    = 6;
+settings.gph_per_img    = 4;
 settings.labels         = ["p_{e} - Latitude (m)","p_{n} - Longitude (m)","h - Altitude (m)"];
 
 %% Functions
@@ -578,8 +578,8 @@ function y_m = get_y_m(z,param)
 %     end
     psi = psi - param.declination;
     
-    w_n = V_gh*cos(chi)-u_a*cos(psi);
-    w_e = V_gh*sin(chi)-u_a*sin(psi);
+    w_n = 0;%V_gh*cos(chi)*cos(theta)-u_a*cos(psi)*cos(theta);
+    w_e = 0;%V_gh*sin(chi)*cos(theta)-u_a*sin(psi)*cos(theta);
     w_d = 0;
 
     y_m(1,1) = p_n;

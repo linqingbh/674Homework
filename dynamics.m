@@ -68,9 +68,6 @@ classdef dynamics < handle
             tic
             % Iterate through each timestep
             for i = 2:length(r)
-%                 disp('------------------------')
-%                 tic
-
                 % Propigate Dynamic Model
                 [self.x,x_dot,d] = rk4(@(time,state) self.eqs_motion(time,state,self.u,self.param),[t(i-1),t(i)],self.x);
 
@@ -88,19 +85,16 @@ classdef dynamics < handle
                 y_m_hat = self.get_y_m(z_f,self.param);
                 y_m = self.get_y_m(z,self.param);
 
-%                 tic
                 % Observe State
                 x_hat = zeros(size(self.x));
                 d_hat = zeros(size(d));
                 for j = 1:length(self.observers)
                     [x_hat(self.observers(j).x_indexes),d_hat(self.observers(j).d_indexes)] = self.observers(j).observe(self.x,z_f,y_m_hat,r(:,i),self.u,d,t(i));
                 end
-%                 toc
 
                 % Convert
                 [y_r_hat,y_r_dot_hat] = self.get_y_r(z_f,x_hat,d_hat,self.param);
                 [y_r,y_r_dot] = self.get_y_r(z,self.x,d,self.param);
-
 
                 % Implimennt controller
                 [self.u,r(:,i)] = self.controller_architecture(self.controllers,y_r_hat,y_r_dot_hat,r(:,i),d_hat,t(i),self.param);
@@ -129,7 +123,6 @@ classdef dynamics < handle
                         self.percent_done = new_percent_done;
                     end
                 end
-%             toc
             end
             disp("100%")
             toc

@@ -188,11 +188,15 @@ classdef controllers < handle
             for i = 1:length(is_angle)
                 for j = 1:length(actual(1,:))
                     if length(commanded(1,:))==1,k=1;else,k=j;end
-                    if is_angle
+                    if is_angle(i)
                         e_y_r = [cos(actual(i,j));sin(actual(i,j));0];
                         e_r = [cos(commanded(i,k));sin(commanded(i,k));0];
                         direction = cross(e_y_r,e_r);
-                        e(i,j) = sign(direction(3))*atan2(sqrt(norm(e_y_r)^2*norm(e_r)^2-dot(e_y_r,e_r)^2),dot(e_y_r,e_r));
+                        try
+                            e(i,j) = sign(direction(3))*atan2(sqrt(norm(e_y_r)^2*norm(e_r)^2-dot(e_y_r,e_r)^2),dot(e_y_r,e_r));
+                        catch
+                            e(i,j) = commanded(i,k) - actual(i,j);
+                        end
                     else
                         e(i,j) = commanded(i,k) - actual(i,j);
                     end
