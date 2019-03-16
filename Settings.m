@@ -20,7 +20,8 @@ param.trim.R = Inf;
 param.trim.gamma = 0*pi/180;
 param.trim.h_0 = 100;
 [param.u_0,param.x_0,param.y_r_0] = functions.get_equilibrium('throw',param,functions);
-
+param.d_0 = [param.wind.base;0;0;0];
+d_0s = zeros(size(param.d_names));
 x_0s = zeros(size(param.x_names));
 z_0s = zeros(size(param.z_names));
 m_0s = zeros(size(param.m_names));
@@ -55,7 +56,7 @@ square3 = function_generator(input,period,amplitude,offset,phase_delay,t);
 r = [square1*pi;line;square2*50+100;line;line;square3*10+param.trim.V_a];
 
 %% Simulation Parameters
-settings.active_fig  = 2;
+settings.active_fig  = 4;
 settings.show_hist   = true;
 settings.animation   = false;
 settings.plot        = true;
@@ -141,8 +142,8 @@ settings.plot_names  = {% ["p_{n} - Longitude (m)","p_{n}"];
                           "x_hat_e_{r}"
                           ].'
 
-                          ["w_n - North Wind","y_m_{w_n}","y_m_hat_{w_n}"];
-                          ["w_e - East Wind","y_m_{w_e}","y_m_hat_{w_e}"];
+                          ["w_n - North Wind","w_n","y_m_{w_n}","d_hat_{w_n}"];
+                          ["w_e - East Wind","w_e","y_m_{w_e}","d_hat_{w_e}"];
 %                           ["w_d - Down Wind","y_m_{w_d}","y_m_hat_{w_d}"];
                           
 %                          ["a - Accelormeter (m\s^{2})","z_f_{Accel_x}","z_f_{Accel_y}","z_f_{Accel_z}"];
@@ -157,7 +158,7 @@ warning('off','all')
 %% Publish Data
 core.publish_list("t",t)
 core.publish_list("r",r)
-core.publish("d",[param.wind.base;0;0;0])
+core.publish("d",param.d_0)
 core.publish("x",param.x_0)
 core.publish("x_dot",x_0s)
 core.publish("z",z_0s)
@@ -166,7 +167,7 @@ core.publish("z_hat",z_0s)
 core.publish("y_m",m_0s)
 core.publish("y_m_hat",m_0s)
 core.publish("x_hat",param.x_0)
-core.publish("d_hat",r_0s)
+core.publish("d_hat",param.d_0)
 core.publish("y_r",param.y_r_0)
 core.publish("y_r_hat",r_0s)
 core.publish("y_r_dot",r_0s)
@@ -199,7 +200,7 @@ zeta_V = 0.707;
 
 %% Sensors
 sense.perfect = false;
-sense.d_names = [];
+sense.d_names = ["w_n","w_e","w_d"];
 
 sense.type = sensors.GPS;
 sense.x_names = ["p_{n}";"p_{e}";"p_{d}";"u";"v";"w";"\phi";"\theta";"\psi"];
@@ -212,7 +213,7 @@ sense.z_names = "Bar";
 core.functions.sensors(2) = sensors(sense,param);
 
 sense.type = sensors.Pito;
-sense.x_names = "u";
+sense.x_names = ["p_{d}","u","\phi","\theta","\psi"];
 sense.z_names = "Pito";
 core.functions.sensors(3) = sensors(sense,param);
 
@@ -234,7 +235,7 @@ core.functions.sensors(6) = sensors(sense,param);
 % Measure
 z_0 = zeros(size(param.z_names));
 for j = 1:length(core.functions.sensors)
-    [~,z_0(core.functions.sensors(j).z_indexes)] = core.functions.sensors(j).sense(param.x_0,functions.eqs_motion(0,param.x_0,param.u_0,param),[],0);
+    [~,z_0(core.functions.sensors(j).z_indexes)] = core.functions.sensors(j).sense(param.x_0,functions.eqs_motion(0,param.x_0,param.u_0,param),param.wind.base,0);
 end
 y_m_0 = functions.get_y_m(z_0,param);
 core.publish_specific("z",z_0,1)
@@ -246,25 +247,26 @@ core.publish_specific("y_m_hat",y_m_0,1)
 core.functions.filters = my_filter([0,... GPS_n
                                     0,... GPS_e
                                     0,... GPS_h
-                                    0,... GPS_Vg
-                                    0,... GPS_chi
-                                    1,... Bar
-                                    1,... Pito
-                                    1,... Comp
+                                    10,... GPS_Vg
+                                    10,... GPS_chi
+                                    10,... Bar
+                                    10,... Pito
+                                    10,... Comp
                                     10,... Accel_x
                                     10,... Accel_y
                                     10,... Accel_z
                                     10,... RateGyro_p
                                     10,... RateGyro_q
                                     10],...RateGyro_r
-                                    [0.9,... GPS_n
-                                     0.9,... GPS_e
-                                     0.9,...   GPS_h
-                                     0.9,... GPS_Vg
-                                     0.9,... GPS_chi
-                                     0.8,...   Bar
-                                     0.8,...   Pito
-                                     0.8,...   Comp
+                                    ...
+                                    [0.5,... GPS_n
+                                     0.5,... GPS_e
+                                     0.5,...   GPS_h
+                                     0.5,... GPS_Vg
+                                     0.5,... GPS_chi
+                                     0.5,...   Bar
+                                     0.5,...   Pito
+                                     0.5,...   Comp
                                      0.5,...   Accel_x
                                      0.5,...   Accel_y
                                      0.5,...   Accel_z
@@ -279,13 +281,12 @@ core.functions.filters.update_every_step = false;
 observe.type = observers.ekf;
 observe.x_names = param.x_names;
 observe.r_names = [];
-observe.z_names = param.z_names;
-observe.m_names = param.m_names;
+observe.m_names = param.m_names;%["p_{n}";"p_{e}";"p_{d}";"u_a";"Accel_x";"Accel_y";"Accel_z";"\psi";"p";"q";"r";"\chi";"V_gh"];
 observe.u_names = param.u_names;
-observe.d_names = [];
+observe.d_names = ["w_n","w_e","w_d"];
         %p_n;p_e;p_d;   u;   u;   w; phi;theta;psi;   p;   q;   r;
-gains = [100,100,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01;    % P_n
-         100,100,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01;    % P_e
+gains = [1000,1000,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01;    % P_n
+         1000,1000,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01;    % P_e
          0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01;  % P_d
          0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01;  % u
          0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01;  % v
@@ -296,11 +297,16 @@ gains = [100,100,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01;    % P_n
          0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01;  % p
          0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01;  % q
          0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01,0.01]; % r
-
-observe.L.Q = (my_cov(@(state) functions.eqs_motion(0,state,param.u_0,param),param.x_0)).*gains;
+d_gains = [0.01,0,0;
+           0,0.01,0;
+           0,0,0];
+observe.L.Q = [(my_cov(@(state) functions.eqs_motion(0,state,param.u_0,param),param.x_0)).*gains,zeros(length(param.x_names),3);zeros(3,length(param.x_names)),d_gains];
 core.functions.observers(1) = observers(observe,core);
 
-% observe.type = observers.pass;
+% observe.type = observers.ekf;
+% observe.x_names = [];
+% observe.r_names = [];
+% observe.u_names = [];
 % observe.d_names = ["w_n","w_e","w_d"];
 % observe.m_names = ["w_n","w_e","w_d"];
 % core.functions.observers(2) = observers(observe,core);

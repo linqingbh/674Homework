@@ -231,9 +231,13 @@ classdef animate < handle
         
         function play(self)
             
+            disp("Animator is getting data.")
+            
             % Get time
             [x,data,t] = self.get_data();
             if self.animation
+                
+                disp("Animation Starting.")
                 
                 time_watch = tic; % Timer that iterates through each image
                 
@@ -246,6 +250,8 @@ classdef animate < handle
                     self.add_data(t(1:j),data(:,1:j))
                     drawnow limitrate
                 end
+                
+                disp("Animation finished.")
                 
                 % For information's sake, display the time of the output
                 toc(time_watch)

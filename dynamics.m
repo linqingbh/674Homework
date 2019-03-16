@@ -65,6 +65,8 @@ classdef dynamics < handle
             r = self.core.subscribe_history('r');
             t = self.core.subscribe_history('t');
             
+            disp("Begining system analysis.")
+            
             tic
             % Iterate through each timestep
             for i = 2:length(r)
@@ -89,7 +91,7 @@ classdef dynamics < handle
                 x_hat = zeros(size(self.x));
                 d_hat = zeros(size(d));
                 for j = 1:length(self.observers)
-                    [x_hat(self.observers(j).x_indexes),d_hat(self.observers(j).d_indexes)] = self.observers(j).observe(self.x,z_f,y_m_hat,r(:,i),self.u,d,t(i));
+                    [x_hat(self.observers(j).x_indexes),d_hat(self.observers(j).d_indexes)] = self.observers(j).observe(self.x,y_m_hat,r(:,i),self.u,d,t(i));
                 end
 
                 % Convert
@@ -116,6 +118,8 @@ classdef dynamics < handle
                 self.core.publish('y_r_dot',y_r_dot);
                 self.core.publish('y_r_dot_hat',y_r_dot_hat);
                 self.core.publish('u',self.u);
+                
+                % Print Progress Indicator
                 if self.progress_update
                     new_percent_done = round(i/length(r)*100);
                     if abs(new_percent_done - self.percent_done) > 1
@@ -125,6 +129,7 @@ classdef dynamics < handle
                 end
             end
             disp("100%")
+            disp("System successfully analized.")
             toc
         end
     end

@@ -68,6 +68,7 @@ classdef sensors < handle
                     self.sensor_function = @self.execute_Comp;
                     self.sigma = 0.03*pi/180;
                     self.beta = 1*pi/180+param.declination;
+                    self.update_rate = 8;
                 case self.Accel
                     self.sensor_function = @self.execute_Accel;
                     self.sigma = 0.0025*9.81;
@@ -140,12 +141,9 @@ classdef sensors < handle
     
     methods (Static)
         % Sensor Functions ------------------------------------------------
-        function y_m = execute_GPS(x,~,~)
-            p_n=x(1);p_e=x(2);h=-x(3);u=x(4);v=x(5);w=x(6);phi=x(7);theta=x(8);psi=x(9);
-            
-            V_g_g = get_rotation(phi,theta,psi,'b->v',[u;v;w]);
-            V_n = V_g_g(1);
-            V_e = V_g_g(2);
+        function y_m = execute_GPS(x,x_dot,~)
+            p_n=x(1);p_e=x(2);h=-x(3);
+            V_n=x_dot(1);V_e=x_dot(2);
             
             y_m = zeros(5,1);
             y_m(1) = p_n;
@@ -156,14 +154,18 @@ classdef sensors < handle
         end
         
         function y_m = execute_Bar(x,~,~)
+            h = -x(1);
             g = 9.81;
-            air = atmosphere(0);
-            y_m = air.rho*g*(-x);
+            air = atmosphere(h);
+            y_m = air.rho*g*h;
         end
         
-        function y_m = execute_Pito(x,~,~)
-            air = atmosphere(0);
-            y_m = air.rho*x^2/2;
+        function y_m = execute_Pito(x,~,d)
+            h=-x(1);u=x(2);phi=x(3);theta=x(4);psi=x(5);
+            V_w = get_rotation(phi,theta,psi,'v->b',d);
+            u_w = V_w(1);
+            air = atmosphere(h);
+            y_m = air.rho*(u-u_w)^2/2;
         end
         
         function y_m = execute_Comp(x,~,~)
@@ -201,7 +203,7 @@ classdef sensors < handle
                 for j = 1:length(sensors)
                     last_update = sensors(j).last_update;
                     last_reading = sensors(j).y_m;
-                    [z(sensors(j).z_indexes,i),z_hat(sensors(j).z_indexes,i)] = sensors(j).sense(x,zeros(size(x)),[],sensors(j).last_update+1/sensors(j).update_rate); %#ok<AGROW>
+                    [z(sensors(j).z_indexes,i),z_hat(sensors(j).z_indexes,i)] = sensors(j).sense(x,zeros(size(x)),param.wind.base,sensors(j).last_update+1/sensors(j).update_rate); %#ok<AGROW>
                     sensors(j).last_update = last_update;
                     sensors(j).y_m = last_reading;
                 end
@@ -209,13 +211,12 @@ classdef sensors < handle
                 y_m_hat(i,:) = get_y_m(z_hat(:,i),param);
             end
             
-            
-            
             covariance_matrix = cov(y_m_hat);
+            covariance_matrix(14,14) = 4;% fix
+            covariance_matrix(15,15) = 4;% fix
             bias_list = mean(z_hat-z,2);
             
             for j = 1:length(sensors)
-                
                 sensors(j).beta_hat = bias_list(sensors(j).z_indexes);
             end
             

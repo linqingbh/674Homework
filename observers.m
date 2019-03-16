@@ -3,16 +3,12 @@ classdef observers < handle
     properties
         % General to pass to other functions
         param
-
-        % Param
-        L
         
         % States
         x_e
         u_e
         x_hat
         x_indexes
-        z_indexes
         m_indexes
         r_indexes
         u_indexes
@@ -25,12 +21,11 @@ classdef observers < handle
         m_is_angle
         x_is_angle
         
+        % Param
+        L
+        
         % Defaults
         t = 0;
-        
-        % Throw
-        saved_A
-        saved_C
     end
     
     properties (Constant)
@@ -52,30 +47,15 @@ classdef observers < handle
             % General to pass to other functions
             self.param = param;
             
-            % Functions of Import
-            observe.L.f = @(x,u) functions.eqs_motion(0,x(1:length(observe.x_names)),u,param);
-            observe.L.h = @(x,u) functions.get_y_m(set_indexes(functions.sensors,'z_indexes','sense',{x,functions.eqs_motion(0,x,u,param),[],0}),param);
-            observe.L.A = @(x,u) numerical_jacobian(@(state) self.L.f(state,u),x,[],[],[],param.x_is_angle);
-            observe.L.B = @(x,u) numerical_jacobian(@(input) self.L.f(x,input),u,[],[],[],param.x_is_angle);
-            observe.L.C = @(x,u,indexes) numerical_jacobian(@(state) self.L.h(state,u),x,[],[],indexes,param.m_is_angle);
-            observe.L.D = @(x,u) numerical_jacobian(@(input) self.L.h(x,input),u,[],[],[],param.m_is_angle);
-            observe.L.P = zeros(length(observe.x_names));
-            observe.L.R = sensors.callibrate_sensors(core,param.x_0);
-            
-            % Param
-            self.L = observe.L;
-            
             % States
             self.x_indexes = get_indexes(param.x_names,observe.x_names);
             self.m_indexes = get_indexes(param.m_names,observe.m_names);
-            self.z_indexes = get_indexes(param.z_names,observe.z_names);
             self.r_indexes = get_indexes(param.r_names,observe.r_names);
             self.u_indexes = get_indexes(param.u_names,observe.u_names);
             self.d_indexes = get_indexes(param.d_names,observe.d_names);
             x_0 = core.subscribe('x_hat');
             d_0 = core.subscribe('d_hat');
             y_m = core.subscribe('y_m');
-            z = core.subscribe('z');
             [self.x_e,self.u_e] = functions.get_equilibrium(x_0,param);
             self.x_hat = [x_0(self.x_indexes);d_0(self.d_indexes)];
             self.position = y_m(self.m_indexes);
@@ -85,6 +65,19 @@ classdef observers < handle
             self.type = observe.type;
             self.m_is_angle = param.m_is_angle(self.m_indexes);  
             self.x_is_angle = param.x_is_angle(self.x_indexes); 
+            
+            % Functions of Import
+            observe.L.f = @(x,u) [functions.eqs_motion(0,x,u,param);0;0;0]; %Cheating to test
+            observe.L.h = @(x,u) functions.get_y_m(set_indexes(functions.sensors,'z_indexes','sense',{x,functions.eqs_motion(0,x,u,param),x(end-2:end),0}),param); % cheat %what if they skip a state in the input then d_hat might be accidentlily included
+            observe.L.A = @(x,u) numerical_jacobian(@(state) self.L.f(state,u),x,[],[],[],self.x_is_angle);
+            observe.L.B = @(x,u) numerical_jacobian(@(input) self.L.f(x,input),u,[],[],[],self.x_is_angle);
+            observe.L.C = @(x,u,indexes) numerical_jacobian(@(state) self.L.h(state,u),x,[],[],indexes,self.m_is_angle); % more cheating (see numerical jacobian)
+            observe.L.D = @(x,u) numerical_jacobian(@(input) self.L.h(x,input),u,[],[],[],self.m_is_angle);
+            observe.L.P = zeros(length(observe.x_names)+length(observe.d_names));
+            observe.L.R = sensors.callibrate_sensors(core,param.x_0);
+            
+            % Param
+            self.L = observe.L;
 
             % Observer Specific
             switch self.type
@@ -93,7 +86,6 @@ classdef observers < handle
                 case self.de
                 case self.dy
                 case self.ekf
-%                     self.position = z(self.z_indexes);
             end
             
         end
@@ -114,21 +106,21 @@ classdef observers < handle
         end
         
         % Main ------------------------------------------------------------
-        function [x_hat,d_hat] = observe(self,x,z,y_m,r,u,d,t)
+        function [x_hat,d_hat] = observe(self,x_true,y_m,r,u,d,t)
             % Unpack
             dt  = t - self.t;
-            x   = [x(self.x_indexes);d(self.d_indexes)];
-            z   = z(self.z_indexes);
+            x_true = x_true(self.x_indexes);
             y_m = y_m(self.m_indexes);
             r   = r(self.r_indexes);
             u   = u(self.u_indexes);
+            d   = d(self.d_indexes);
             
             % Obtain measurment
             switch self.type
                 case self.pass
                     x_hat = y_m;
                 case self.exact
-                    x_hat = x;
+                    x_hat = x_true;
                 case self.luenberger
                     x_hat = rk4(@(time,state) self.luenberger_eqs(time,state,y_m,u,d),[self.t,t],self.x_hat);
                 case self.de

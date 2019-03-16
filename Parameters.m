@@ -61,7 +61,7 @@ param.D_in_param.random  = 0.2.*[];
 param.D_in_param.bias    = 0.0.*[];
 
 % Wind
-base = [0;0;0];
+base = [5;0;0];
 gust = wind.steady;
 param.wind = wind(gust,base,param.V_design);
 
@@ -381,11 +381,6 @@ function [x_dot,d] = eqs_motion(t,x,input,param)
     x_dot(4:6)   = Acceleration+1/mass*[fx;fy;fz];
     x_dot(7:9)   = R_bv12*x(10:12);
     x_dot(10:12) = sum(Angular_Acceleration,2);
-    
-    if t >= 18
-        throw = 1;
-    end
-    
 end
 
 % Anamation Information
@@ -576,10 +571,9 @@ function y_m = get_y_m(z,param)
 %         theta = asin(a_x/g);
 %         warning("Acceleration in the x direction is %f",a_x)
 %     end
-    psi = psi - param.declination;
     
-    w_n = 0;%V_gh*cos(chi)*cos(theta)-u_a*cos(psi)*cos(theta);
-    w_e = 0;%V_gh*sin(chi)*cos(theta)-u_a*sin(psi)*cos(theta);
+    w_n = V_gh*cos(chi)-u_a*cos(psi);
+    w_e = V_gh*sin(chi)-u_a*sin(psi);
     w_d = 0;
 
     y_m(1,1) = p_n;

@@ -9,6 +9,8 @@ if settings.simulate
     % Simulate the system
     system.simulate(); 
     
+    
+    
     % Object for display of results
     animation = animate(core); 
 
