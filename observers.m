@@ -56,7 +56,7 @@ classdef observers < handle
             x_0 = core.subscribe('x_hat');
             d_0 = core.subscribe('d_hat');
             y_m = core.subscribe('y_m');
-            [self.x_e,self.u_e] = functions.get_equilibrium(x_0,param);
+            [self.x_e,self.u_e] = functions.get_equilibrium(x_0,core);
             self.x_hat = [x_0(self.x_indexes);d_0(self.d_indexes)];
             self.position = y_m(self.m_indexes);
             self.velocity = zeros(size(self.position));
@@ -120,7 +120,7 @@ classdef observers < handle
                 case self.pass
                     x_hat = y_m;
                 case self.exact
-                    x_hat = x_true;
+                    x_hat = [x_true;d];
                 case self.luenberger
                     x_hat = rk4(@(time,state) self.luenberger_eqs(time,state,y_m,u,d),[self.t,t],self.x_hat);
                 case self.de

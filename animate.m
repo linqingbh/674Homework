@@ -12,7 +12,6 @@ classdef animate < handle
         animation
         plot
         active_fig
-        show_hist
         var_indexes
 
         % Handle to the function that draws the simulation
@@ -24,8 +23,10 @@ classdef animate < handle
         settings
         
         % Handles
-        animation_handle
-        history_handle
+        poly_handle
+        lines_handle
+        points_handle
+        vecs_handle
         plot_handles
 
         % Settings
@@ -52,7 +53,6 @@ classdef animate < handle
             self.animation = settings.animation;
             self.plot = settings.plot;
             self.active_fig = settings.active_fig;
-            self.show_hist = settings.show_hist;
             
             % Handle to the function that draws the simulation
             self.get_drawing = functions.get_drawing;
@@ -86,19 +86,23 @@ classdef animate < handle
             if self.animation
                 
                 % Get points
-                [points,colors,history] = self.get_drawing(x,self.settings,self.param);
+                [poly,poly_colors,lines,line_colors,points,point_colors,vecs,vec_colors] = self.get_drawing(x,self.core,true);
                 
                 % Plot
                 fig = figure(1);clf
                 fig.WindowStyle = 'docked';
                 hold on
-                if self.show_hist
-                    for i = 1:length(history)
-                        self.history_handle(i) = plot3(history{i}(1,:),history{i}(2,:),history{i}(3,:),"-r",'linewidth',1.5);
-                    end
+                for i = 1:length(lines)
+                    self.lines_handle(i) = plot3(lines{i}(1,:),lines{i}(2,:),lines{i}(3,:),line_colors{i},'linewidth',1.5);
                 end
-                for i = 1:length(colors)
-                    self.animation_handle(i) = fill3(points{i}(1,:),points{i}(2,:),points{i}(3,:),colors{i});
+                for i = 1:length(points)
+                    self.points_handle(i) = plot3(points{i}(1,:),points{i}(2,:),points{i}(3,:),point_colors{i},'MarkerSize',20);
+                end
+                for i = 1:length(vecs)
+                    self.vecs_handle(i) = quiver3(vecs{i}(1,1),vecs{i}(2,1),vecs{i}(3,1),vecs{i}(1,2),vecs{i}(2,2),vecs{i}(3,2),vec_colors{i},'linewidth',1.5);
+                end
+                for i = 1:length(poly)
+                    self.poly_handle(i) = fill3(poly{i}(1,:),poly{i}(2,:),poly{i}(3,:),poly_colors{i});
                 end
                 axis equal
                 axis(self.window)
@@ -144,22 +148,35 @@ classdef animate < handle
         function redraw(self,x)
             
             % Place the points of the drawing in the new location
-            [points,colors,history] = self.get_drawing(x,self.settings,self.param);          
+            [poly,~,lines,~,points,~,vecs] = self.get_drawing(x,self.core,false);          
             
             % Update the chart data.
-            if self.show_hist
-                for i = 1:length(history)
-                    set(self.history_handle(i),...
-                        'XData',history{i}(1,:),...
-                        'YData',history{i}(2,:),...
-                        'ZData',history{i}(3,:));
-                end
+            for i = 1:length(lines)
+                set(self.lines_handle(i),...
+                    'XData',lines{i}(1,:),...
+                    'YData',lines{i}(2,:),...
+                    'ZData',lines{i}(3,:));
             end
-            for i = 1:length(colors)
-                set(self.animation_handle(i),...
-                    'X',points{i}(1,:),...
-                    'Y',points{i}(2,:),...
-                    'Z',points{i}(3,:))
+            for i = 1:length(points)
+                set(self.lines_handle(i),...
+                    'XData',points{i}(1,:),...
+                    'YData',points{i}(2,:),...
+                    'ZData',points{i}(3,:));
+            end
+            for i = 1:length(vecs)
+                set(self.vecs_handle(i),...
+                    'UData',vecs{i}(1,2),...
+                    'VData',vecs{i}(2,2),...
+                    'WData',vecs{i}(3,2),...
+                    'XData',vecs{i}(1,1),...
+                    'YData',vecs{i}(2,1),...
+                    'ZData',vecs{i}(3,1));
+            end
+            for i = 1:length(poly)
+                set(self.poly_handle(i),...
+                    'X',poly{i}(1,:),...
+                    'Y',poly{i}(2,:),...
+                    'Z',poly{i}(3,:))
             end
         end
         

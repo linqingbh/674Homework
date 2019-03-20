@@ -19,7 +19,9 @@ param.trim.V_a = 25;
 param.trim.R = Inf;
 param.trim.gamma = 0*pi/180;
 param.trim.h_0 = 100;
-[param.u_0,param.x_0,param.y_r_0] = functions.get_equilibrium('throw',param,functions);
+core.functions = functions;
+core.param = param;
+[param.u_0,param.x_0,param.y_r_0] = functions.get_equilibrium('throw',core);
 param.d_0 = [param.wind.base;0;0;0];
 d_0s = zeros(size(param.d_names));
 x_0s = zeros(size(param.x_names));
@@ -28,55 +30,62 @@ m_0s = zeros(size(param.m_names));
 r_0s = zeros(size(param.r_names));
 u_0s = zeros(size(param.u_names));
 
+param.default.b = [0;0;-100];
+param.default.rho = 200;
+param.default.q = [0;0;1];
+param.default.limits = [0,2*pi];
+
 %% Model
 assumed_param = param;
 assumed_param.wind = wind(wind.steady,[0;0;0],param.aircraft.V_design);
 [param.A,param.B] = get_linear_model(functions.eqs_motion,assumed_param);
 
 %% Input Parameters
-input       = 'line';  % Type of signal
-period      = 10;        % Period of signal input
-amplitude   = 1;        % Amplitude of signal input
-offset      = 0;            % Offset from 0
-phase_delay = 0;        % phase delay of function in rad
-line = function_generator(input,period,amplitude,offset,phase_delay,t);
+waypoints = [500,-500,500,-500;
+             500,500,-500,-500;
+             -100,-100,-100,-100;
+             0,pi/2,pi,3*pi/2];
+core.publish_list("W",waypoints);
 
-input       = 'square';  % Type of signal
-period      = 40;        % Period of signal input
-amplitude   = 0.5;        % Amplitude of signal input
-offset      = 0.5;            % Offset from 0
-phase_delay = 0;        % phase delay of function in rad
-square1 = function_generator(input,period,amplitude,offset,phase_delay,t);
-phase_delay = pi/3;        % phase delay of function in rad
-square2 = function_generator(input,period,amplitude,offset,phase_delay,t);
-phase_delay = 2*pi/3;        % phase delay of function in rad
-square3 = function_generator(input,period,amplitude,offset,phase_delay,t);
 
-% Commanded Inputs [chi,phi,h,theta,beta,V_a]
-r = [square1*pi;line;square2*50+100;line;line;square3*10+param.trim.V_a];
+
+%% Path Follower
+core.param = param;% Make unessisary
+follow.x_names = ["p_{n}";"p_{e}";"p_{d}"];
+follow.r_names = ["\chi","h","V_a"];
+follow.k.line = 0.01;
+follow.k.orbit = 2;
+follow.chi_inf = pi/3;
+functions.followers(1) = path_follower(follow,core);
+
+%% Path Manager
+manage.type = path_manager.dubins;
+manage.x_names = ["p_{n}";"p_{e}";"p_{d}";"\psi"];
+manage.W = waypoints;
+functions.manager(1) = path_manager(manage,core);
 
 %% Simulation Parameters
-settings.active_fig  = 4;
-settings.show_hist   = true;
-settings.animation   = false;
+settings.active_fig  = 1;
+settings.animation   = true;
 settings.plot        = true;
 settings.simulate    = true;
 settings.progress_update = true;
+pause off
 settings.plot_names  = {% ["p_{n} - Longitude (m)","p_{n}"];
 %                         ["p_{e} - Latitude (m)","p_{e}"];
 
-                        ["p_{d} - Altitude (m)","y_r_{h}","r_{h}"];
-                        ["\theta - Pitch (rad)","y_r_{\theta}","r_{\theta}"];
-                        ["\chi - Course (rad)","y_r_{\chi}","r_{\chi}"];
-                        ["\phi - Roll (rad)","y_r_{\phi}","r_{\phi}"];
-                        ["\beta - Sideslip (rad)","y_r_{\beta}","r_{\beta}"]
-                        ["V_a - Forward Velocity (m/s)","y_r_{V_a}","r_{V_a}"];
+%                         ["p_{d} - Altitude (m)","y_r_hat_{h}","y_r_{h}","r_{h}"];
+%                         ["\theta - Pitch (rad)","y_r_hat_{\theta}","y_r_{\theta}","r_{\theta}"];
+%                         ["\chi - Course (rad)","y_r_hat_{\chi}","y_r_{\chi}","r_{\chi}"];
+%                         ["\phi - Roll (rad)","y_r_hat_{\phi}","y_r_{\phi}","r_{\phi}"];
+%                         ["\beta - Sideslip (rad)","y_r_hat_{\beta}","y_r_{\beta}","r_{\beta}"]
+%                         ["V_a - Forward Velocity (m/s)","y_r_hat_{V_a}","y_r_{V_a}","r_{V_a}"];
                         
 %                         ["\delta_{a} - Ailorons (rad)","delta_a"];
 %                         ["\delta_{e} - Elevator (rad)","delta_e"];
 %                         ["\delta_{r} - Ruder (rad)","delta_r"];
 %                         ["\delta_{t} - Throttle (%)","delta_t"];
-%                         ["y_{r}_{dot} - Rate of Change","y_r_dot_{h}"]%,"y_r_dot_{\theta}","y_r_dot_{\chi}","y_r_dot_{\phi}","y_r_dot_{\beta}","y_r_dot_{V_a}"]
+                        ["y_{r}_{dot} - Rate of Change","y_r_dot_{\chi}"]%,"y_r_dot_{\theta}","y_r_dot_{\chi}","y_r_dot_{\phi}","y_r_dot_{\beta}","y_r_dot_{V_a}"]
 
 %                         ["p_{n} - Longitude (m)","p_{n}","z_hat_{GPS_n}","z_f_{GPS_n}"];
 %                         ["p_{e} - Latitude (m)","p_{e}","z_hat_{GPS_e}","z_f_{GPS_e}"];
@@ -101,7 +110,7 @@ settings.plot_names  = {% ["p_{n} - Longitude (m)","p_{n}"];
 %                         ["\chi - Course (rad)","y_r_{\chi}","y_m_{\chi}"]
 %                         ["V_gh - Horizontal Velcoity (m/s)","y_r_{V_a}","y_m_{V_gh}"]
 
-                        ["p_{n} - Longitude (m)","p_{n}","y_m_hat_{p_{n}}"];
+%                         ["p_{n} - Longitude (m)","p_{n}","y_m_hat_{p_{n}}"];
 %                         ["p_{e} - Latitude (m)","p_{e}","y_m_{p_{e}}"];
 %                         ["h - Altitude (m)","p_{d}","y_m_{p_{d}}"];
 %                         ["u_a - Forward Velocity (m/s)","u","y_m_{u_a}"];
@@ -117,39 +126,42 @@ settings.plot_names  = {% ["p_{n} - Longitude (m)","p_{n}"];
 %                         ["w_n - North Wind (m/s)","w_n"]
 %                         ["w_e - East Wind (m/s)","w_e"]
 %                         ["w_d - Down Wind (m/s)","w_d"]
-
-                          ["e - Position Error (m)";
-                          "x_hat_e_{p_{n}}";
-                          "x_hat_e_{p_{e}}";
-                          "x_hat_e_{p_{d}}"
-                          ].'
-                          
-                          ["e - Velocity Error (m/s)";
-                          "x_hat_e_{u}";
-                          "x_hat_e_{v}";
-                          "x_hat_e_{w}"
-                          ].'
-                          
-                          ["e - Angle Error (rad)";
-                          "x_hat_e_{\phi}";
-                          "x_hat_e_{\theta}";
-                          "x_hat_e_{\psi}"
-                          ].'
-                          
-                          ["e - Angular Rate Error (rad/s)";
-                          "x_hat_e_{p}";
-                          "x_hat_e_{q}";
-                          "x_hat_e_{r}"
-                          ].'
-
-                          ["w_n - North Wind","w_n","y_m_{w_n}","d_hat_{w_n}"];
-                          ["w_e - East Wind","w_e","y_m_{w_e}","d_hat_{w_e}"];
+% 
+%                           ["e - Position Error (m)";
+%                           "x_hat_e_{p_{n}}";
+%                           "x_hat_e_{p_{e}}";
+%                           "x_hat_e_{p_{d}}"
+%                           ].'
+%                           
+%                           ["e - Velocity Error (m/s)";
+%                           "x_hat_e_{u}";
+%                           "x_hat_e_{v}";
+%                           "x_hat_e_{w}"
+%                           ].'
+%                           
+%                           ["e - Angle Error (rad)";
+%                           "x_hat_e_{\phi}";
+%                           "x_hat_e_{\theta}";
+%                           "x_hat_e_{\psi}"
+%                           ].'
+%                           
+%                           ["e - Angular Rate Error (rad/s)";
+%                           "x_hat_e_{p}";
+%                           "x_hat_e_{q}";
+%                           "x_hat_e_{r}"
+%                           ].'
+% 
+%                           ["w_n - North Wind","w_n","d_hat_{w_n}"];
+%                           ["w_e - East Wind","w_e","d_hat_{w_e}"];
 %                           ["w_d - Down Wind","y_m_{w_d}","y_m_hat_{w_d}"];
                           
 %                          ["a - Accelormeter (m\s^{2})","z_f_{Accel_x}","z_f_{Accel_y}","z_f_{Accel_z}"];
 %                          ["Omega_dot - Rate Gyro (rad/s)","p","q","r"]
 %                          ["u - Foward Velcoity (m)","u","x_hat_{u}"];
 %                          ["v - Sideways Velcoity (m)","v","x_hat_{v}"];
+
+%                             ["e_h - Altitude Error (m)","y_r_e_{h}"]
+                            ["e_{\chi} - Course Error (m)","y_r_e_{\chi}"]
                         };
                     
 % Display warnings?
@@ -157,7 +169,7 @@ warning('off','all')
 
 %% Publish Data
 core.publish_list("t",t)
-core.publish_list("r",r)
+core.publish("r",r_0s)
 core.publish("d",param.d_0)
 core.publish("x",param.x_0)
 core.publish("x_dot",x_0s)
@@ -278,7 +290,7 @@ core.functions.filters.update_every_step = false;
 
 %% State Observers
 
-observe.type = observers.ekf;
+observe.type = observers.exact;
 observe.x_names = param.x_names;
 observe.r_names = [];
 observe.m_names = param.m_names;%["p_{n}";"p_{e}";"p_{d}";"u_a";"Accel_x";"Accel_y";"Accel_z";"\psi";"p";"q";"r";"\chi";"V_gh"];
@@ -368,7 +380,7 @@ switch control.type
         core.functions.controllers(4) = controllers(control,core);
     case controllers.PID
         % Course hold
-        control.windup_limit = 0.01;
+        control.windup_limit = 0.3;
         control.sat_lim.high = param.phi_sat_lim.high;
         control.sat_lim.low = param.phi_sat_lim.low;
         control.K.P = 2*zeta_chi*w_n_chi*V_g/g;

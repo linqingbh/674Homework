@@ -2,7 +2,7 @@ classdef controllers < handle
     
     properties
         % General to pass to other functions
-        param
+        core
         
         % Functions
         get_equilibrium
@@ -52,7 +52,7 @@ classdef controllers < handle
             functions = core.functions;
 
             % General to pass to other functions
-            self.param = param;
+            self.core = core;
             
             % Functions
             self.get_equilibrium = functions.get_equilibrium;
@@ -161,7 +161,7 @@ classdef controllers < handle
             end
             
             % Add Equilibrium
-            [u_equilibrium,~,y_r_equilibrium] = self.get_equilibrium(y_r,self.param);
+            [u_equilibrium,~,y_r_equilibrium] = self.get_equilibrium(y_r,self.core);
             u_e = [u_equilibrium(self.u_indexes);y_r_equilibrium(self.r_out_indexes)];
             u_unsat = u + u_e - d;
 
@@ -183,7 +183,7 @@ classdef controllers < handle
     methods (Static)
         function e = get_error(actual,commanded,is_angle)
             if isempty(is_angle),is_angle=false(length(commanded(:,1)));end
-            
+                
             e = zeros(size(actual));
             for i = 1:length(is_angle)
                 for j = 1:length(actual(1,:))

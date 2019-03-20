@@ -35,6 +35,18 @@ classdef piping < handle
             self.topics{index}{history_index} = data;
         end
         
+        function publish_update(self,name,data)
+            if ~any(strcmp(self.topic_names,name)) || ~isequal(data,self.subscribe(name))
+                index = strcmp(name,[self.topic_names{1:end}]);
+                if any(index)
+                    self.topics{index}{end+1} = data;
+                else
+                    self.topic_names{end+1} = name;
+                    self.topics{end+1}{1} = data;
+                end
+            end
+        end
+        
         function data = subscribe(self,name)
             index = strcmp(name,[self.topic_names{1:end}]);
             if any(index)
@@ -47,7 +59,12 @@ classdef piping < handle
         function data = subscribe_history(self,name)
             index = strcmp(name,[self.topic_names{1:end}]);
             if any(index)
-                data = cell2mat(self.topics{index});
+                try
+                    data = [self.topics{index}{:}];
+%                     data = cell2mat(self.topics{index});
+                catch
+                    data = [self.topics{index}{:}];
+                end
             else
                 error('Subcribed to a unpublished topic.')
             end

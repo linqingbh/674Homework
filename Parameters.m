@@ -41,6 +41,8 @@ param.delta_t_sat_lim.low = 0;
 param.take_off_alt = 10;
 param.take_off_pitch = 15*pi/180;
 
+param.fillet_radius = 100;
+
 % State Description
 param.d_names = ["w_n";"w_e";"w_d";"w_n_dot";"w_e_dot";"w_d_dot"];
 param.x_names = ["p_{n}";"p_{e}";"p_{d}";"u";"v";"w";"\phi";"\theta";"\psi";"p";"q";"r"];
@@ -62,7 +64,7 @@ param.D_in_param.bias    = 0.0.*[];
 
 % Wind
 base = [5;0;0];
-gust = wind.steady;
+gust = wind.moderate_highalt;
 param.wind = wind(gust,base,param.V_design);
 
 % Magnetic
@@ -91,13 +93,15 @@ param.tailwing_l = 0.12*scale;
 % Vertical Stabalizer
 param.tail_h = 0.1*scale;
 
+param.course_vec_length = 2*scale;
+
 % Simulation
 settings.start       = 0;      % s
 settings.step        = 0.02;   % s
-settings.end         = 30;     % s
+settings.end         = 300;     % s
 t = settings.start:settings.step:settings.end;
 
-settings.playback_rate  = 1;
+settings.playback_rate  = 0.5;
 settings.window         = [-1000,1000,-1000,1000,0,200]; % m
 settings.view           = [45,45];
 settings.gph_per_img    = 4;
@@ -155,29 +159,29 @@ function [u,r] = controller_architecture(controllers,y_r,y_r_dot,r,d_hat,t,param
 end
 
 % Dynamic Equilibrium Input
-function [u,x,y_r] = get_equilibrium(~,param,functions)
-    if isfield(param,'u_0')
-        u = param.u_0;
-        x = param.x_0;
-        y_r = param.y_r_0;
+function [u,x,y_r] = get_equilibrium(~,core)
+    if isfield(core.param,'u_0')
+        u = core.param.u_0;
+        x = core.param.x_0;
+        y_r = core.param.y_r_0;
     else
         % Unpack
-        V_a = param.trim.V_a;
-        R = param.trim.R;
-        gamma = param.trim.gamma;
+        V_a = core.param.trim.V_a;
+        R = core.param.trim.R;
+        gamma = core.param.trim.gamma;
         desired = get_x_dot_star(V_a,R,gamma);
         
         % Initial conditions
         initial = [0;0;0];
         
         % Wind
-        param.wind = wind(wind.steady,[0;0;0],V_a);
+        core.param.wind = wind(wind.steady,[0;0;0],V_a);
         
         
         % function to trim
-        fun = @(input) norm(functions.eqs_motion(0,get_x_star(input,V_a,R,gamma),get_u_star(input,V_a,R,gamma,param),param)-desired)^2;
+        fun = @(input) norm(core.functions.eqs_motion(0,get_x_star(input,V_a,R,gamma),get_u_star(input,V_a,R,gamma,core.param),core.param)-desired)^2;
         
-        switch param.optimizer.name
+        switch core.param.optimizer.name
             case "fminsearch"
                 output = fminsearch(fun,initial);
             case "gradiant"
@@ -187,11 +191,11 @@ function [u,x,y_r] = get_equilibrium(~,param,functions)
         end
 
         x = get_x_star(output,V_a,R,gamma);
-        x(3) = -param.trim.h_0;
+        x(3) = -core.param.trim.h_0;
 
-        u = get_u_star(output,V_a,R,gamma,param);
+        u = get_u_star(output,V_a,R,gamma,core.param);
         
-        y_r = [0;0;param.trim.h_0;x(8);0;V_a];
+        y_r = [0;0;core.param.trim.h_0;x(8);0;V_a];
     end
 end
 
@@ -384,7 +388,7 @@ function [x_dot,d] = eqs_motion(t,x,input,param)
 end
 
 % Anamation Information
-function [points,colors,history] = get_drawing(x,~,param)
+function [poly,poly_colors,lines,line_colors,points,point_colors,vecs,vec_colors] = get_drawing(x,core,first_call)
     persistent previous_positions
     
     if isempty('previous_positions')
@@ -394,22 +398,22 @@ function [points,colors,history] = get_drawing(x,~,param)
     previous_positions = [previous_positions,x(1:3)];
     
     % Wing
-    wing_w = param.wing_w;
-    wing_l = param.wing_l;
+    wing_w = core.param.wing_w;
+    wing_l = core.param.wing_l;
     
     % Fusalage
-    fuse_w  = param.fuse_w;
-    fuse_l1 = param.fuse_l1;
-    fuse_l2 = param.fuse_l2;
-    fuse_l3 = param.fuse_l3;
-    fuse_h  = param.fuse_h;
+    fuse_w  = core.param.fuse_w;
+    fuse_l1 = core.param.fuse_l1;
+    fuse_l2 = core.param.fuse_l2;
+    fuse_l3 = core.param.fuse_l3;
+    fuse_h  = core.param.fuse_h;
     
     % Horizontal Stabalizer
-    tailwing_w = param.tailwing_w;
-    tailwing_l = param.tailwing_l;
+    tailwing_w = core.param.tailwing_w;
+    tailwing_l = core.param.tailwing_l;
     
     % Virtical Stabalizer
-    tail_h = param.tail_h;
+    tail_h = core.param.tail_h;
     
 
     % Aircraft Parts
@@ -453,23 +457,83 @@ function [points,colors,history] = get_drawing(x,~,param)
                 -fuse_l3,0,-tail_h;
                 -fuse_l3+tailwing_l,0,0;];
 
-    points = {wing.right,wing.left,fusalage.nose.top,fusalage.nose.left,fusalage.nose.right,fusalage.nose.bottom,fusalage.empanage.top,fusalage.empanage.left,fusalage.empanage.right,fusalage.empanage.bottom,horz_stab,vir_stab};
-    colors = {'g','r','y','k','k','k','k','k','k','k','k','k'};
+    poly = {wing.right,wing.left,fusalage.nose.top,fusalage.nose.left,fusalage.nose.right,fusalage.nose.bottom,fusalage.empanage.top,fusalage.empanage.left,fusalage.empanage.right,fusalage.empanage.bottom,horz_stab,vir_stab};
+    poly_colors = {'g','r','y','k','k','k','k','k','k','k','k','k'};
     
 
     R_bv = get_rotation(x(7),x(8),x(9),'b->v');
     R_NED_ENU = get_rotation(x(7),x(8),x(9),'NED->ENU');
+
+    history = previous_positions;
     
-    for i = 1:length(points)
-        points{i} = points{i}.';
+    lines = {history};
+    line_colors = {"-r"};
+    
+    points = {};
+    point_colors = {};
+    
+    vecs = {};
+    vec_colors = {};
+    
+    if first_call
+        legs = core.subscribe_history('legs');
         
-        points{i} = R_bv*points{i};
-        points{i} = x(1:3)+points{i};
+        w = core.settings.window(2)-core.settings.window(1);
+        l = core.settings.window(4)-core.settings.window(3);
+        h  = core.settings.window(6)-core.settings.window(5);
+
+        for i = 1:length(legs)
+            switch legs(i).rho
+                case Inf
+                    follow_path = legs(i).limits;
+                otherwise
+                    if ((legs(i).limits(1)<=legs(i).limits(2)) && (legs(i).q(3)>=0))
+                        rad = legs(i).limits(1):0.01:legs(i).limits(2);
+                    elseif ((legs(i).limits(1)>legs(i).limits(2)) && (legs(i).q(3)<0))
+                        rad = legs(i).limits(2):0.01:legs(i).limits(1);
+                    elseif ((legs(i).limits(1)<=legs(i).limits(2)) && (legs(i).q(3)<0))
+                        rad = [legs(i).limits(2):0.01:pi,-pi:0.01:legs(i).limits(1)];
+                    elseif ((legs(i).limits(1)>legs(i).limits(2)) && (legs(i).q(3)>=0))
+                        rad = [legs(i).limits(1):0.01:pi,-pi:0.01:legs(i).limits(2)];
+                    end
+                    follow_path = legs(i).b + legs(i).rho*[cos(rad);sin(rad);zeros(size(rad))];
+            end
+            lines{end+1} = follow_path; %#ok<AGROW>
+            line_colors{end+1} = "-b"; %#ok<AGROW>
+        end
         
-        points{i} = R_NED_ENU*points{i};
+        W = core.subscribe_history('W');
+        points{end+1} = W(1:3,:);
+        point_colors{end+1} = ".k";
+        if length(W(:,1)) == 4
+            for i = 1:length(W(1,:))
+                vecs{end+1} = [W(1:3,i),core.param.course_vec_length*[cos(W(4,i));sin(W(4,i));0]];
+                vec_colors{end+1} = "-g";
+            end
+        end
     end
     
-    history{1} = R_NED_ENU*previous_positions;
+    
+    for i = 1:length(poly)
+        poly{i} = poly{i}.';
+        
+        poly{i} = R_bv*poly{i};
+        poly{i} = x(1:3)+poly{i};
+        
+        poly{i} = R_NED_ENU*poly{i};
+    end
+    
+    for i = 1:length(lines)
+        lines{i} =R_NED_ENU*lines{i};
+    end
+    
+    for i = 1:length(points)
+        points{i} =R_NED_ENU*points{i}; %#ok<AGROW>
+    end
+    
+    for i = 1:length(vecs)
+        vecs{i} =R_NED_ENU*vecs{i}; %#ok<AGROW>
+    end
 end
 
 % y_r Conversion

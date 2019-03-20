@@ -8,6 +8,7 @@ classdef dynamics < handle
 
         % State
         x
+        r
         u
 
         % Functions
@@ -17,6 +18,8 @@ classdef dynamics < handle
         observers
         get_y_m
         get_y_r
+        manager
+        followers
         controllers
         controller_architecture
 
@@ -48,6 +51,8 @@ classdef dynamics < handle
             self.observers = functions.observers;
             self.get_y_m = functions.get_y_m;
             self.get_y_r = functions.get_y_r;
+            self.manager = functions.manager;
+            self.followers = functions.followers;
             self.controllers = functions.controllers;
             self.controller_architecture = functions.controller_architecture;
             
@@ -62,14 +67,13 @@ classdef dynamics < handle
         
         function simulate(self)
             
-            r = self.core.subscribe_history('r');
             t = self.core.subscribe_history('t');
             
             disp("Begining system analysis.")
             
             tic
             % Iterate through each timestep
-            for i = 2:length(r)
+            for i = 2:length(t)
                 % Propigate Dynamic Model
                 [self.x,x_dot,d] = rk4(@(time,state) self.eqs_motion(time,state,self.u,self.param),[t(i-1),t(i)],self.x);
 
@@ -91,18 +95,26 @@ classdef dynamics < handle
                 x_hat = zeros(size(self.x));
                 d_hat = zeros(size(d));
                 for j = 1:length(self.observers)
-                    [x_hat(self.observers(j).x_indexes),d_hat(self.observers(j).d_indexes)] = self.observers(j).observe(self.x,y_m_hat,r(:,i),self.u,d,t(i));
+                    [x_hat(self.observers(j).x_indexes),d_hat(self.observers(j).d_indexes)] = self.observers(j).observe(self.x,y_m_hat,self.r,self.u,d,t(i));
                 end
 
                 % Convert
                 [y_r_hat,y_r_dot_hat] = self.get_y_r(z_f,x_hat,d_hat,self.param);
                 [y_r,y_r_dot] = self.get_y_r(z,self.x,d,self.param);
-
+                
+                % Path Manager
+                leg = self.manager.manage(x_hat);
+                
+                % Path Follower
+                self.r = zeros(size(self.param.r_names));
+                for j = 1:length(self.followers)
+                    self.r(self.followers(j).r_indexes) = self.followers(j).follow(leg,x_hat);
+                end
+                
                 % Implimennt controller
-                [self.u,r(:,i)] = self.controller_architecture(self.controllers,y_r_hat,y_r_dot_hat,r(:,i),d_hat,t(i),self.param);
+                [self.u,self.r] = self.controller_architecture(self.controllers,y_r_hat,y_r_dot_hat,self.r,d_hat,t(i),self.param);
 
                 % Save history
-                self.core.publish_specific('r',r(:,i),i);
                 self.core.publish('d',d);
                 self.core.publish('x',self.x);
                 self.core.publish('x_dot',x_dot);
@@ -117,11 +129,13 @@ classdef dynamics < handle
                 self.core.publish('y_r_hat',y_r_hat);
                 self.core.publish('y_r_dot',y_r_dot);
                 self.core.publish('y_r_dot_hat',y_r_dot_hat);
+                self.core.publish_update('legs',leg);
+                self.core.publish('r',self.r);
                 self.core.publish('u',self.u);
                 
                 % Print Progress Indicator
                 if self.progress_update
-                    new_percent_done = round(i/length(r)*100);
+                    new_percent_done = round(i/length(t)*100);
                     if abs(new_percent_done - self.percent_done) > 1
                         disp(string(self.percent_done)+"%")
                         self.percent_done = new_percent_done;
@@ -129,7 +143,7 @@ classdef dynamics < handle
                 end
             end
             disp("100%")
-            disp("System successfully analized.")
+            disp("System successfully analyzed.")
             toc
         end
     end
