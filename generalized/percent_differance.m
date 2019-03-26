@@ -5,13 +5,13 @@ function diff = percent_differance(xi,xf)
         if length(xi)>1
             diff = norm(xf-xi)/norm(xf);
         else
-            diff = xf-xi/xf;
+            diff = (xf-xi)/xf;
         end
     else
         if length(xi)>1
             diff = norm(xf-xi)/norm(xi);
         else
-            diff = xf-xi/xi;
+            diff = (xf-xi)/xi;
         end
     end
 end

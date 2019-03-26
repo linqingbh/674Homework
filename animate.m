@@ -35,7 +35,7 @@ classdef animate < handle
     end
     
     methods
-        function self = animate(core)
+        function [self,animation_fig] = animate(core)
             
             % Unpack -----------------------------------------------------
             settings = core.settings;
@@ -89,8 +89,8 @@ classdef animate < handle
                 [poly,poly_colors,lines,line_colors,points,point_colors,vecs,vec_colors] = self.get_drawing(x,self.core,true);
                 
                 % Plot
-                fig = figure(1);clf
-                fig.WindowStyle = 'docked';
+                animation_fig = figure(1);clf
+                animation_fig.WindowStyle = 'docked';
                 hold on
                 for i = 1:length(lines)
                     self.lines_handle(i) = plot3(lines{i}(1,:),lines{i}(2,:),lines{i}(3,:),line_colors{i},'linewidth',1.5);
@@ -158,7 +158,7 @@ classdef animate < handle
                     'ZData',lines{i}(3,:));
             end
             for i = 1:length(points)
-                set(self.lines_handle(i),...
+                set(self.points_handle(i),...
                     'XData',points{i}(1,:),...
                     'YData',points{i}(2,:),...
                     'ZData',points{i}(3,:));

@@ -7,6 +7,7 @@ classdef dynamics < handle
         param
 
         % State
+        pe
         x
         r
         u
@@ -18,6 +19,7 @@ classdef dynamics < handle
         observers
         get_y_m
         get_y_r
+        planner
         manager
         followers
         controllers
@@ -41,6 +43,7 @@ classdef dynamics < handle
             self.param = param;
             
             % Initialize State
+            self.pe = param.pe;
             self.x = core.subscribe('x');
             self.u = core.subscribe('u');
             
@@ -51,6 +54,7 @@ classdef dynamics < handle
             self.observers = functions.observers;
             self.get_y_m = functions.get_y_m;
             self.get_y_r = functions.get_y_r;
+            self.planner = functions.planner;
             self.manager = functions.manager;
             self.followers = functions.followers;
             self.controllers = functions.controllers;
@@ -102,8 +106,11 @@ classdef dynamics < handle
                 [y_r_hat,y_r_dot_hat] = self.get_y_r(z_f,x_hat,d_hat,self.param);
                 [y_r,y_r_dot] = self.get_y_r(z,self.x,d,self.param);
                 
+                % Path Planner
+                W = self.planner.plan(x_hat,self.pe);
+                
                 % Path Manager
-                leg = self.manager.manage(x_hat);
+                leg = self.manager.manage(W,x_hat);
                 
                 % Path Follower
                 self.r = zeros(size(self.param.r_names));
@@ -115,6 +122,7 @@ classdef dynamics < handle
                 [self.u,self.r] = self.controller_architecture(self.controllers,y_r_hat,y_r_dot_hat,self.r,d_hat,t(i),self.param);
 
                 % Save history
+                self.core.publish_update('W',W);
                 self.core.publish('d',d);
                 self.core.publish('x',self.x);
                 self.core.publish('x_dot',x_dot);
@@ -129,7 +137,7 @@ classdef dynamics < handle
                 self.core.publish('y_r_hat',y_r_hat);
                 self.core.publish('y_r_dot',y_r_dot);
                 self.core.publish('y_r_dot_hat',y_r_dot_hat);
-                self.core.publish_update('legs',leg);
+                self.core.publish_update('path',leg.line);
                 self.core.publish('r',self.r);
                 self.core.publish('u',self.u);
                 

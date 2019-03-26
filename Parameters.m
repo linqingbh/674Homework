@@ -41,7 +41,7 @@ param.delta_t_sat_lim.low = 0;
 param.take_off_alt = 10;
 param.take_off_pitch = 15*pi/180;
 
-param.fillet_radius = 100;
+param.fillet_radius = 80;
 
 % State Description
 param.d_names = ["w_n";"w_e";"w_d";"w_n_dot";"w_e_dot";"w_d_dot"];
@@ -73,7 +73,8 @@ param.declination = 2.9*pi/180;
 %% Simulation Dimensions
 
 % Aircraft Dimensions
-scale = 100;
+scale = 10;
+city_scale = 4;
 
 % Wing
 param.wing_w = 1.5*scale;
@@ -98,14 +99,19 @@ param.course_vec_length = 2*scale;
 % Simulation
 settings.start       = 0;      % s
 settings.step        = 0.02;   % s
-settings.end         = 300;     % s
+settings.end         = 100;     % s
 t = settings.start:settings.step:settings.end;
 
 settings.playback_rate  = 0.5;
-settings.window         = [-1000,1000,-1000,1000,0,200]; % m
+settings.window         = [-100*city_scale,400*city_scale,-100*city_scale,400*city_scale,0,500]; % m
 settings.view           = [45,45];
 settings.gph_per_img    = 4;
 settings.labels         = ["p_{e} - Latitude (m)","p_{n} - Longitude (m)","h - Altitude (m)"];
+
+%% World
+
+% param.obstical_count = 9;
+% param.obstical_positions = 
 
 %% Functions
 
@@ -475,51 +481,59 @@ function [poly,poly_colors,lines,line_colors,points,point_colors,vecs,vec_colors
     vecs = {};
     vec_colors = {};
     
-    if first_call
-        legs = core.subscribe_history('legs');
+    path = core.subscribe_history('path');
         
-        w = core.settings.window(2)-core.settings.window(1);
-        l = core.settings.window(4)-core.settings.window(3);
-        h  = core.settings.window(6)-core.settings.window(5);
+    w = core.settings.window(2)-core.settings.window(1);
+    l = core.settings.window(4)-core.settings.window(3);
+    h  = core.settings.window(6)-core.settings.window(5);
 
-        for i = 1:length(legs)
-            switch legs(i).rho
-                case Inf
-                    follow_path = legs(i).limits;
-                otherwise
-                    if ((legs(i).limits(1)<=legs(i).limits(2)) && (legs(i).q(3)>=0))
-                        rad = legs(i).limits(1):0.01:legs(i).limits(2);
-                    elseif ((legs(i).limits(1)>legs(i).limits(2)) && (legs(i).q(3)<0))
-                        rad = legs(i).limits(2):0.01:legs(i).limits(1);
-                    elseif ((legs(i).limits(1)<=legs(i).limits(2)) && (legs(i).q(3)<0))
-                        rad = [legs(i).limits(2):0.01:pi,-pi:0.01:legs(i).limits(1)];
-                    elseif ((legs(i).limits(1)>legs(i).limits(2)) && (legs(i).q(3)>=0))
-                        rad = [legs(i).limits(1):0.01:pi,-pi:0.01:legs(i).limits(2)];
-                    end
-                    follow_path = legs(i).b + legs(i).rho*[cos(rad);sin(rad);zeros(size(rad))];
-            end
-            lines{end+1} = follow_path; %#ok<AGROW>
-            line_colors{end+1} = "-b"; %#ok<AGROW>
-        end
-        
-        W = core.subscribe_history('W');
-        points{end+1} = W(1:3,:);
-        point_colors{end+1} = ".k";
-        if length(W(:,1)) == 4
-            for i = 1:length(W(1,:))
-                vecs{end+1} = [W(1:3,i),core.param.course_vec_length*[cos(W(4,i));sin(W(4,i));0]];
-                vec_colors{end+1} = "-g";
-            end
+    lines{end+1} = previous_positions(:,1);
+    line_colors{end+1} = "--g";
+    if ~isempty(path)
+        lines{end} = path;
+    end
+    
+
+    W = core.subscribe_history('W');
+    points{end+1} = [];
+    point_colors{end+1} = ".k";
+    if ~isempty(W)
+        points{end} = [points{1},W(1:3,:)];
+%         if length(W(:,1)) == 4
+%             for i = 1:length(W(1,:))
+%                 vecs{end+1} = [W(1:3,i),core.param.course_vec_length*[cos(W(4,i));sin(W(4,i));0]];
+%                 vec_colors{end+1} = "-g";
+%             end
+%         end
+    else
+        % Add vecs here
+        points{end} = previous_positions(:,1);
+    end
+    
+    if first_call
+        for i = 1:length(core.param.world.obsticals)
+            poly{end+1} = core.param.world.obsticals(i).corners(:,[1,2,6,5]);
+            poly_colors{end+1} = 'b';
+            poly{end+1} = core.param.world.obsticals(i).corners(:,[2,3,7,6]);
+            poly_colors{end+1} = 'b';
+            poly{end+1} = core.param.world.obsticals(i).corners(:,[3,4,8,7]);
+            poly_colors{end+1} = 'b';
+            poly{end+1} = core.param.world.obsticals(i).corners(:,[4,1,5,8]);
+            poly_colors{end+1} = 'b';
+            poly{end+1} = core.param.world.obsticals(i).corners(:,5:8);
+            poly_colors{end+1} = 'b';
         end
     end
     
-    
-    for i = 1:length(poly)
+    for i = 1:12
         poly{i} = poly{i}.';
         
         poly{i} = R_bv*poly{i};
         poly{i} = x(1:3)+poly{i};
-        
+    end
+    
+    
+    for i = 1:length(poly)
         poly{i} = R_NED_ENU*poly{i};
     end
     

@@ -66,7 +66,8 @@ classdef piping < handle
                     data = [self.topics{index}{:}];
                 end
             else
-                error('Subcribed to a unpublished topic.')
+                warning('Subcribed to a unpublished topic.')
+                data = [];
             end
         end
         

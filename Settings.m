@@ -7,15 +7,26 @@ clear all
 clc
 
 % profile on
-rng('default')
+% rng('default')
+rng_state = rng;
+save('rng_state.mat','rng_state')
+% load('rng_state.mat')
+% rng(rng_state)
 
 % Add Path
 Parameters;
 
+%% Generate World
+obstical_count = 25;
+spacing = 50*city_scale;
+width = 50*city_scale;
+max_height = 250;
+param.world = generate_world(obstical_count,spacing,width,max_height,settings);
+
 %% Initial Conditions
 % Trim
 param.optimizer.name = "fminsearch"; % fminsearch gradiant
-param.trim.V_a = 25;
+param.trim.V_a = 15;
 param.trim.R = Inf;
 param.trim.gamma = 0*pi/180;
 param.trim.h_0 = 100;
@@ -30,10 +41,12 @@ m_0s = zeros(size(param.m_names));
 r_0s = zeros(size(param.r_names));
 u_0s = zeros(size(param.u_names));
 
+param.x_0(1:3) = [0;0;-100];
+
 param.default.b = [0;0;-100];
 param.default.rho = 200;
 param.default.q = [0;0;1];
-param.default.limits = [0,2*pi];
+param.default.line = draw_circle(param.default.b,param.default.rho);
 
 %% Model
 assumed_param = param;
@@ -41,28 +54,35 @@ assumed_param.wind = wind(wind.steady,[0;0;0],param.aircraft.V_design);
 [param.A,param.B] = get_linear_model(functions.eqs_motion,assumed_param);
 
 %% Input Parameters
-waypoints = [500,-500,500,-500;
-             500,500,-500,-500;
-             -100,-100,-100,-100;
-             0,pi/2,pi,3*pi/2];
-core.publish_list("W",waypoints);
+param.pe = [300*city_scale;300*city_scale;-100];
 
-
-
-%% Path Follower
-core.param = param;% Make unessisary
-follow.x_names = ["p_{n}";"p_{e}";"p_{d}"];
-follow.r_names = ["\chi","h","V_a"];
-follow.k.line = 0.01;
-follow.k.orbit = 2;
-follow.chi_inf = pi/3;
-functions.followers(1) = path_follower(follow,core);
-
-%% Path Manager
-manage.type = path_manager.dubins;
-manage.x_names = ["p_{n}";"p_{e}";"p_{d}";"\psi"];
-manage.W = waypoints;
-functions.manager(1) = path_manager(manage,core);
+%% Path Planner
+% plan.type = path_planner.p2p;
+% plan.collision_step = 0.1;
+% plan.margin_of_saftey = 0;
+% plan.height = -param.x_0(3,1);
+% plan.distance = param.fillet_radius*3;
+% plan.x_names = ["p_{n}";"p_{e}";"p_{d}";"\psi"];
+% plan.max_iterations = 500; %Also acts as number of look ahead steps.
+% plan.plot = true;
+% core.param = param;
+% plan.circle = 200;
+% functions.planner(1) = path_planner(plan,core);
+% 
+% %% Path Follower
+% core.param = param;% Make unessisary
+% follow.x_names = ["p_{n}";"p_{e}";"p_{d}"];
+% follow.r_names = ["\chi","h","V_a"];
+% follow.k.line = 0.01;
+% follow.k.orbit = 2;
+% follow.chi_inf = pi/2;
+% functions.followers(1) = path_follower(follow,core);
+% 
+% %% Path Manager
+% manage.type = path_manager.dubins;
+% manage.planner = functions.planner(1);
+% manage.x_names = ["p_{n}";"p_{e}";"p_{d}";'\psi'];
+% functions.manager(1) = path_manager(manage,core);
 
 %% Simulation Parameters
 settings.active_fig  = 1;
@@ -70,7 +90,7 @@ settings.animation   = true;
 settings.plot        = true;
 settings.simulate    = true;
 settings.progress_update = true;
-pause off
+pause on
 settings.plot_names  = {% ["p_{n} - Longitude (m)","p_{n}"];
 %                         ["p_{e} - Latitude (m)","p_{e}"];
 
