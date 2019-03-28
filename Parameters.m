@@ -26,8 +26,8 @@ param.delta_a_sat_lim.low = -45*pi/180;
 param.delta_r_sat_lim.high = 45*pi/180;
 param.delta_r_sat_lim.low = -45*pi/180;
 
-param.h_sat_lim.high = 3;
-param.h_sat_lim.low = -3;
+param.h_sat_lim.high = Inf;
+param.h_sat_lim.low = -Inf;
 
 param.theta_sat_lim.high = 45*pi/180;
 param.theta_sat_lim.low = -45*pi/180;
@@ -63,8 +63,8 @@ param.D_in_param.random  = 0.2.*[];
 param.D_in_param.bias    = 0.0.*[];
 
 % Wind
-base = [5;0;0];
-gust = wind.moderate_highalt;
+base = [0;0;0];
+gust = wind.steady;
 param.wind = wind(gust,base,param.V_design);
 
 % Magnetic
@@ -73,7 +73,7 @@ param.declination = 2.9*pi/180;
 %% Simulation Dimensions
 
 % Aircraft Dimensions
-scale = 10;
+scale = 100;
 city_scale = 4;
 
 % Wing
@@ -103,7 +103,7 @@ settings.end         = 100;     % s
 t = settings.start:settings.step:settings.end;
 
 settings.playback_rate  = 0.5;
-settings.window         = [-100*city_scale,400*city_scale,-100*city_scale,400*city_scale,0,500]; % m
+settings.window         = [-1000,1000,-1000,1000,0,200]; % m % add city scale
 settings.view           = [45,45];
 settings.gph_per_img    = 4;
 settings.labels         = ["p_{e} - Latitude (m)","p_{n} - Longitude (m)","h - Altitude (m)"];
@@ -124,7 +124,7 @@ functions.get_y_m = @get_y_m;
 functions.get_tf_coefficents = @get_tf_coefficents;
 
 % Controller
-function [u,r] = controller_architecture(controllers,y_r,y_r_dot,r,d_hat,t,param)
+function [u,r] = controller_architecture(controllers,x_hat,y_r,y_r_dot,r,d_hat,t,param)
     % Saturate
     r_sat = r;
     chi_error = controllers.get_error(y_r(1),r_sat(1),true);
@@ -137,9 +137,9 @@ function [u,r] = controller_architecture(controllers,y_r,y_r_dot,r,d_hat,t,param
 
     % Lateral
     % Saturate
-    [u(1,1),r_sat] = controllers(1).control(y_r,y_r_dot,r_sat,d_hat,t);
+    [u(1,1),r_sat] = controllers(1).control(x_hat,y_r,y_r_dot,r_sat,d_hat,t);
     r(2) = r_sat(2);
-    [u(3,1),r] = controllers(2).control(y_r,y_r_dot,r,d_hat,t);
+    [u(3,1),r] = controllers(2).control(x_hat,y_r,y_r_dot,r,d_hat,t);
     
     % Longitudinal
 %     if y_r(3) < param.take_off_alt
@@ -153,9 +153,9 @@ function [u,r] = controller_architecture(controllers,y_r,y_r_dot,r,d_hat,t,param
         r_sat(3) = max(param.h_sat_lim.low+y_r(3),r_sat(3));
         
         % Controller
-        [u(2,1),r_sat] = controllers(3).control(y_r,y_r_dot,r_sat,d_hat,t);
+        [u(2,1),r_sat] = controllers(3).control(x_hat,y_r,y_r_dot,r_sat,d_hat,t);
         r(4) = r_sat(4);
-        [u(4,1),r] = controllers(4).control(y_r,y_r_dot,r,d_hat,t);
+        [u(4,1),r] = controllers(4).control(x_hat,y_r,y_r_dot,r,d_hat,t);
 %     end
     
 %     u(1,1) = param.u_0(1);
@@ -481,49 +481,49 @@ function [poly,poly_colors,lines,line_colors,points,point_colors,vecs,vec_colors
     vecs = {};
     vec_colors = {};
     
-    path = core.subscribe_history('path');
+%     path = core.subscribe_history('path');
         
-    w = core.settings.window(2)-core.settings.window(1);
-    l = core.settings.window(4)-core.settings.window(3);
-    h  = core.settings.window(6)-core.settings.window(5);
-
-    lines{end+1} = previous_positions(:,1);
-    line_colors{end+1} = "--g";
-    if ~isempty(path)
-        lines{end} = path;
-    end
-    
-
-    W = core.subscribe_history('W');
-    points{end+1} = [];
-    point_colors{end+1} = ".k";
-    if ~isempty(W)
-        points{end} = [points{1},W(1:3,:)];
-%         if length(W(:,1)) == 4
-%             for i = 1:length(W(1,:))
-%                 vecs{end+1} = [W(1:3,i),core.param.course_vec_length*[cos(W(4,i));sin(W(4,i));0]];
-%                 vec_colors{end+1} = "-g";
-%             end
+%     w = core.settings.window(2)-core.settings.window(1);
+%     l = core.settings.window(4)-core.settings.window(3);
+%     h  = core.settings.window(6)-core.settings.window(5);
+% 
+%     lines{end+1} = previous_positions(:,1);
+%     line_colors{end+1} = "--g";
+%     if ~isempty(path)
+%         lines{end} = path;
+%     end
+%     
+% 
+%     W = core.subscribe_history('W');
+%     points{end+1} = [];
+%     point_colors{end+1} = ".k";
+%     if ~isempty(W)
+%         points{end} = [points{1},W(1:3,:)];
+% %         if length(W(:,1)) == 4
+% %             for i = 1:length(W(1,:))
+% %                 vecs{end+1} = [W(1:3,i),core.param.course_vec_length*[cos(W(4,i));sin(W(4,i));0]];
+% %                 vec_colors{end+1} = "-g";
+% %             end
+% %         end
+%     else
+%         % Add vecs here
+%         points{end} = previous_positions(:,1);
+%     end
+%     
+%     if first_call
+%         for i = 1:length(core.param.world.obsticals)
+%             poly{end+1} = core.param.world.obsticals(i).corners(:,[1,2,6,5]);
+%             poly_colors{end+1} = 'b';
+%             poly{end+1} = core.param.world.obsticals(i).corners(:,[2,3,7,6]);
+%             poly_colors{end+1} = 'b';
+%             poly{end+1} = core.param.world.obsticals(i).corners(:,[3,4,8,7]);
+%             poly_colors{end+1} = 'b';
+%             poly{end+1} = core.param.world.obsticals(i).corners(:,[4,1,5,8]);
+%             poly_colors{end+1} = 'b';
+%             poly{end+1} = core.param.world.obsticals(i).corners(:,5:8);
+%             poly_colors{end+1} = 'b';
 %         end
-    else
-        % Add vecs here
-        points{end} = previous_positions(:,1);
-    end
-    
-    if first_call
-        for i = 1:length(core.param.world.obsticals)
-            poly{end+1} = core.param.world.obsticals(i).corners(:,[1,2,6,5]);
-            poly_colors{end+1} = 'b';
-            poly{end+1} = core.param.world.obsticals(i).corners(:,[2,3,7,6]);
-            poly_colors{end+1} = 'b';
-            poly{end+1} = core.param.world.obsticals(i).corners(:,[3,4,8,7]);
-            poly_colors{end+1} = 'b';
-            poly{end+1} = core.param.world.obsticals(i).corners(:,[4,1,5,8]);
-            poly_colors{end+1} = 'b';
-            poly{end+1} = core.param.world.obsticals(i).corners(:,5:8);
-            poly_colors{end+1} = 'b';
-        end
-    end
+%     end
     
     for i = 1:12
         poly{i} = poly{i}.';

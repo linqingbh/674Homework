@@ -16,6 +16,9 @@ classdef controllers < handle
         
         % Param
         K
+        u_e
+        x_e
+        y_r_e
         
         % Settings
         type
@@ -28,6 +31,7 @@ classdef controllers < handle
         plan
         prefilter
         compensator
+        x_indexes
         
         % Defaults
         count = 0;
@@ -59,12 +63,17 @@ classdef controllers < handle
             
             % States
             self.d_indexes = get_indexes(param.d_names,control.d_names);
+            self.x_indexes = get_indexes(param.x_names,control.x_names);
             self.r_in_indexes = get_indexes(param.r_names,control.r_names);
             self.r_out_indexes = get_indexes(param.r_names,control.u_names);
             self.u_indexes = get_indexes(param.u_names,control.u_names);
             
             % Param
             self.K = control.K;
+            [self.u_e,self.x_e,self.y_r_e] = self.get_equilibrium(param.y_r_0,self.core);
+            self.u_e = self.u_e(self.u_indexes);
+            self.x_e = self.x_e(self.x_indexes);
+            self.y_r_e = self.y_r_e(self.r_in_indexes);
             
             % Settigs
             self.type = control.type;
@@ -80,6 +89,7 @@ classdef controllers < handle
                     self.plan = control.plan;
                 case self.PID
                 case self.FSF
+                    [self.K.K,self.K.k_r,self.K.I] = controllers.get_FSF_gains(control.K.t_r,control.K.zeta,-control.K.I,param.A(self.x_indexes,self.x_indexes),param.B(self.x_indexes,self.u_indexes),param.C(self.r_in_indexes,self.x_indexes));
                 case self.LS
                     self.prefilter = control.prefilter;
                     self.compensator = control.compensator;
@@ -93,7 +103,7 @@ classdef controllers < handle
         
         % Full State Feadback ---------------------------------------------
         function u = execute_FSF(self,x,r,sum_of_error)
-            u = -self.K.K*(x-self.x_e) + self.K.k_r*(r-self.r_e) - self.K.I*sum_of_error;
+            u = -self.K.K*(x-self.x_e) + self.K.k_r*(r-self.y_r_e) - self.K.I*sum_of_error;
         end
         
         % Loopshaping -----------------------------------------------------
@@ -127,7 +137,7 @@ classdef controllers < handle
         end
         
         % Main ------------------------------------------------------------
-        function [u,r_out] = control(self,y_r_in,y_r_dot_in,r_in,d,t)
+        function [u,r_out] = control(self,x_in,y_r_in,y_r_dot_in,r_in,d,t)
             
             % Unpack
             dt = t - self.t;self.t = t;
@@ -154,6 +164,7 @@ classdef controllers < handle
                     u_D = y_r_dot;
                     u = self.execute_PID(u_P,u_I,u_D);
                 case self.FSF
+                    x = x_in(self.x_indexes);
                     u = self.execute_FSF(x,r,sum_of_error);
                 case self.LS
                     r_filtered = self.prefilter.filter_next(r,t);
@@ -174,7 +185,7 @@ classdef controllers < handle
             r_out = r_in;
             if ~isempty(self.cascade)
                 r_out(self.r_out_indexes) = u;
-                [u,r_out] = self.cascade.control(y_r_in,y_r_dot_in,r_out,d,t);
+                [u,r_out] = self.cascade.control(x_in,y_r_in,y_r_dot_in,r_out,d,t);
             end
         end
     end
@@ -208,7 +219,61 @@ classdef controllers < handle
         function K = get_PID_gains()
         end
         
-        function K = get_FSF_gains()
+        function [K,k_r,k_i] = get_FSF_gains(t_r,zeta,p_i,A,B,C_r)
+            w_n = 2.2./t_r;
+
+            poles = [];
+            for i = 1:length(t_r)
+                Delta = [1,2.*zeta(i).*w_n(i),w_n(i).^2];
+                poles = [poles;roots(Delta)];
+            end
+            
+%             pertinant_states = [];
+%             B2 = B;
+%             C2 = C_r;
+%             for i = 1:length(poles)/2
+%                 most_changed = find(abs(C2)==max(abs(C2)),1);
+%                 pertinant_states = [pertinant_states,most_changed];
+%                 C2(most_changed) = 0;
+%                 B2(most_changed) = 0;
+%             end
+%             for i = 1:length(poles)/2
+%                 most_changed = find(abs(B2)==max(abs(B2)),1);
+%                 pertinant_states = [pertinant_states,most_changed];
+%                 C2(most_changed) = 0;
+%                 B2(most_changed) = 0;
+%             end
+%             pertinant_states = sort(pertinant_states);
+%             A = A(pertinant_states,pertinant_states);
+%             B = B(pertinant_states,:);
+%             C_r = C_r(:,pertinant_states);
+
+            if p_i ~= 0
+                poles = [poles;p_i];
+                A = [A,zeros(length(A),1);-C_r,0];
+                B = [B;0];
+            end
+
+            K = place(A,B,poles);
+
+            if p_i == 0
+                k_r = -1./(C_r*((A-B*K)^-1)*B);
+                k_i = 0;
+            elseif p_i ~= 0
+                k_i = K(end);
+                K = K(1:end-1);
+                k_r = 1;
+            end
+        end
+        
+        function is_controllable(A,B,C)
+            
+            [~,~,~,~,k]=ctrbf(A,B,C);
+            
+            if sum(k) ~= length(A)
+                unc = length(A) - sum(k);
+                error('System not controllable! There are ' + string(unc) + ' uncontrollable states.')
+            end
         end
         
         function K = get_LS_gains()

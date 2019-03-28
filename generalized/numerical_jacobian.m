@@ -6,6 +6,12 @@ function jacobian = numerical_jacobian(f,x_star,epsilon,x_indexes,y_indexes,y_is
     if ~exist('x_indexes','var') || isempty(x_indexes),x_indexes = 1:length(x_star);end
     if ~exist('y_indexes','var') || isempty(y_indexes),y_indexes = 1:length(y_star);cheat = false;end
     if ~exist('y_is_angle','var') || isempty(y_is_angle),y_is_angle = false(size(y_star));end
+    
+    for i = 1:length(x_star)
+        if x_star(i) == 0
+            x_star(i) = 10^-5;
+        end
+    end
 
     jacobian = zeros(length(y_star),length(x_star));
     for i = 1:length(x_star)
