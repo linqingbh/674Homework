@@ -58,7 +58,6 @@ classdef dynamics < handle
 %             self.manager = functions.manager;
 %             self.followers = functions.followers;
             self.controllers = functions.controllers;
-            self.controller_architecture = functions.controller_architecture;
             
             % Uncertian Param
             self.theoretical_param = param;
@@ -76,6 +75,7 @@ classdef dynamics < handle
             disp("Begining system analysis.")
             
             tic
+            
             % Iterate through each timestep
             for i = 2:length(t)
                 self.r = self.command(:,i);
@@ -107,7 +107,7 @@ classdef dynamics < handle
                 % Convert
                 [y_r_hat,y_r_dot_hat] = self.get_y_r(z_f,x_hat,d_hat,self.param);
                 [y_r,y_r_dot] = self.get_y_r(z,self.x,d,self.param);
-                
+
                 % Path Planner
 %                 W = self.planner.plan(x_hat,self.pe);
 %                 
@@ -121,7 +121,9 @@ classdef dynamics < handle
 %                 end
                 
                 % Implimennt controller
-                [self.u,self.r] = self.controller_architecture(self.controllers,x_hat,y_r_hat,y_r_dot_hat,self.r,d_hat,t(i),self.param);
+                for j = 1:length(self.controllers)
+                    [self.u(self.controllers(j).u_indexes),self.r] = self.controllers(j).control(x_hat,y_r_hat,y_r_dot_hat,self.r,d_hat,t(i));
+                end
 
                 % Save history
 %                 self.core.publish_update('W',W);

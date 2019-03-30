@@ -14,29 +14,16 @@ param.g = 9.81;
 param = aircraft("aerosnode",param);
 
 % System Limits
-param.chi_sat_lim.high = 15*pi/180;
-param.chi_sat_lim.low = -15*pi/180;
+param.h_sat_lim = 3;
+param.chi_sat_lim = 45*pi/180;
+param.theta_sat_lim= 45*pi/180;
+param.phi_sat_lim = 45*pi/180;
 
-param.phi_sat_lim.high = 45*pi/180;
-param.phi_sat_lim.low = -45*pi/180;
 
-param.delta_a_sat_lim.high = 45*pi/180;
-param.delta_a_sat_lim.low = -45*pi/180;
-
-param.delta_r_sat_lim.high = 45*pi/180;
-param.delta_r_sat_lim.low = -45*pi/180;
-
-param.h_sat_lim.high = Inf;
-param.h_sat_lim.low = -Inf;
-
-param.theta_sat_lim.high = 45*pi/180;
-param.theta_sat_lim.low = -45*pi/180;
-
-param.delta_e_sat_lim.high = 45*pi/180;
-param.delta_e_sat_lim.low = -45*pi/180;
-
-param.delta_t_sat_lim.high = 1;
-param.delta_t_sat_lim.low = 0;
+param.delta_a_sat_lim = 45*pi/180;
+param.delta_e_sat_lim = 45*pi/180;
+param.delta_r_sat_lim = 45*pi/180;
+param.delta_t_sat_lim = [0,1];
 
 param.take_off_alt = 10;
 param.take_off_pitch = 15*pi/180;
@@ -99,7 +86,7 @@ param.course_vec_length = 2*scale;
 % Simulation
 settings.start       = 0;      % s
 settings.step        = 0.02;   % s
-settings.end         = 100;     % s
+settings.end         = 10;     % s
 t = settings.start:settings.step:settings.end;
 
 settings.playback_rate  = 0.5;
@@ -117,55 +104,13 @@ settings.labels         = ["p_{e} - Latitude (m)","p_{n} - Longitude (m)","h - A
 
 functions.get_drawing = @get_drawing;
 functions.get_equilibrium = @get_equilibrium;
-functions.eqs_motion = @eqs_motion;
-functions.controller_architecture = @controller_architecture; 
+functions.eqs_motion = @eqs_motion; 
 functions.get_y_r = @get_y_r;
 functions.get_y_m = @get_y_m;
 functions.get_tf_coefficents = @get_tf_coefficents;
 
-% Controller
-function [u,r] = controller_architecture(controllers,x_hat,y_r,y_r_dot,r,d_hat,t,param)
-    % Saturate
-    r_sat = r;
-    chi_error = controllers.get_error(y_r(1),r_sat(1),true);
-    if chi_error > param.chi_sat_lim.high
-        r_sat(1) = y_r(1)+param.chi_sat_lim.high;
-    elseif chi_error < param.chi_sat_lim.low
-        r_sat(1) = y_r(1)+param.chi_sat_lim.low;
-    end
-    
-
-    % Lateral
-    % Saturate
-    [u(1,1),r_sat] = controllers(1).control(x_hat,y_r,y_r_dot,r_sat,d_hat,t);
-    r(2) = r_sat(2);
-    [u(3,1),r] = controllers(2).control(x_hat,y_r,y_r_dot,r,d_hat,t);
-    
-    % Longitudinal
-%     if y_r(3) < param.take_off_alt
-%         r(4) = param.take_off_pitch;
-%         u(2,1) = controllers(3).cascade.control(y_r,y_r_dot,r,d_hat,t);
-%         u(4,1) = 1;
-%     else
-        % Saturate
-        r_sat = r;
-        r_sat(3) = min(param.h_sat_lim.high+y_r(3),r_sat(3));
-        r_sat(3) = max(param.h_sat_lim.low+y_r(3),r_sat(3));
-        
-        % Controller
-        [u(2,1),r_sat] = controllers(3).control(x_hat,y_r,y_r_dot,r_sat,d_hat,t);
-        r(4) = r_sat(4);
-        [u(4,1),r] = controllers(4).control(x_hat,y_r,y_r_dot,r,d_hat,t);
-%     end
-    
-%     u(1,1) = param.u_0(1);
-%     u(2,1) = param.u_0(2);
-%     u(3,1) = param.u_0(3);
-%     u(4,1) = param.u_0(4);
-end
-
 % Dynamic Equilibrium Input
-function [u,x,y_r] = get_equilibrium(~,core)
+function [u,x,y_r,y_r_dot] = get_equilibrium(~,core)
     if isfield(core.param,'u_0')
         u = core.param.u_0;
         x = core.param.x_0;
@@ -198,10 +143,12 @@ function [u,x,y_r] = get_equilibrium(~,core)
 
         x = get_x_star(output,V_a,R,gamma);
         x(3) = -core.param.trim.h_0;
+        x(9) = core.param.trim.psi_0;
 
         u = get_u_star(output,V_a,R,gamma,core.param);
         
-        y_r = [0;0;core.param.trim.h_0;x(8);0;V_a];
+        y_r = [core.param.trim.psi_0;0;core.param.trim.h_0;x(8);0;V_a];
+        y_r_dot = zeros(length(y_r),1);
     end
 end
 
@@ -551,7 +498,7 @@ function [poly,poly_colors,lines,line_colors,points,point_colors,vecs,vec_colors
 end
 
 % y_r Conversion
-function [y_r_out,y_r_dot_out] = get_y_r(z,x,d,param)
+function [y_r_out,y_r_dot_out,y_r_ddot_out] = get_y_r(z,x,d,param,x_dot)
 
     p_d = x(3);
     u = x(4);
@@ -615,6 +562,25 @@ function [y_r_out,y_r_dot_out] = get_y_r(z,x,d,param)
     y_r_dot_out(4,1) = theta_dot;
     y_r_dot_out(5,1) = beta_dot;
     y_r_dot_out(6,1) = V_a_dot;
+    
+    if exist('x_dot','var') && ~isempty(x_dot)
+        rotational_acceleration = [1,sin(phi)*tan(theta),cos(phi)*tan(theta);
+                                   0,cos(phi),-sin(phi);
+                                   0,sin(phi)/cos(theta),cos(phi)/cos(theta)]*x_dot(10:12);
+        phi_ddot = rotational_acceleration(1);
+        theta_ddot = rotational_acceleration(2);
+        chi_ddot = rotational_acceleration(3);
+        
+        linear_acceleration = get_rotation(phi,theta,psi,'b->v',x_dot(4:6));
+        p_d_ddot = linear_acceleration(3);
+        
+        y_r_ddot_out(1,1) = chi_ddot;
+        y_r_ddot_out(2,1) = phi_ddot;
+        y_r_ddot_out(3,1) = -p_d_ddot;
+        y_r_ddot_out(4,1) = theta_ddot;
+        y_r_ddot_out(5,1) = 0;
+        y_r_ddot_out(6,1) = sqrt(sum(x_dot(4:6).^2));
+    end
 end
 
 % y_m Conversion

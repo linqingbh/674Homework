@@ -1,4 +1,5 @@
 classdef controllers < handle
+    % Add ability to swap controllers a set times
     
     properties
         % General to pass to other functions
@@ -13,6 +14,7 @@ classdef controllers < handle
         r_in_indexes
         r_out_indexes
         u_indexes
+        x_indexes
         
         % Param
         K
@@ -22,23 +24,24 @@ classdef controllers < handle
         
         % Settings
         type
-        sat_lim
+        r_sat_lim
+        u_sat_lim
         windup_limit
         r_is_angle
+        x_is_angle
+        error
+        intigrator_correction
+        i_indexes
         
         % Controller Specifc
         t_vec
         plan
         prefilter
         compensator
-        x_indexes
         
         % Defaults
         count = 0;
-        error = 0;
         cascade = [];
-        intigrator_correction = 0;
-        isangle = false
     end
     properties (Constant) % Types of Controllers
         PID = 'PID';
@@ -67,6 +70,8 @@ classdef controllers < handle
             self.r_in_indexes = get_indexes(param.r_names,control.r_names);
             self.r_out_indexes = get_indexes(param.r_names,control.u_names);
             self.u_indexes = get_indexes(param.u_names,control.u_names);
+            self.i_indexes = get_indexes(control.r_names,control.i_names);
+            self.x_indexes = control.x_indexes;
             
             % Param
             self.K = control.K;
@@ -77,10 +82,13 @@ classdef controllers < handle
             
             % Settigs
             self.type = control.type;
-            self.sat_lim.high = control.sat_lim.high;
-            self.sat_lim.low = control.sat_lim.low;
+            self.r_sat_lim = control.r_sat_lim;
+            self.u_sat_lim = control.u_sat_lim;
             self.windup_limit = control.windup_limit;
             self.r_is_angle = param.r_is_angle(self.r_in_indexes);
+            self.x_is_angle = param.x_is_angle(self.x_indexes);
+            self.error = zeros(length(control.r_names),1);
+            self.intigrator_correction = zeros(length(control.r_names),1);
             
             % Controller Specific
             switch self.type
@@ -89,7 +97,7 @@ classdef controllers < handle
                     self.plan = control.plan;
                 case self.PID
                 case self.FSF
-                    [self.K.K,self.K.k_r,self.K.I] = controllers.get_FSF_gains(control.K.t_r,control.K.zeta,-control.K.I,param.A(self.x_indexes,self.x_indexes),param.B(self.x_indexes,self.u_indexes),param.C(self.r_in_indexes,self.x_indexes));
+                    [self.K.K,self.K.k_r,self.K.I] = controllers.get_FSF_gains(control.t_r,control.zeta,self.i_indexes,param.A(self.x_indexes,self.x_indexes),param.B(self.x_indexes,self.u_indexes),param.C(self.r_in_indexes,self.x_indexes));
                 case self.LS
                     self.prefilter = control.prefilter;
                     self.compensator = control.compensator;
@@ -103,7 +111,8 @@ classdef controllers < handle
         
         % Full State Feadback ---------------------------------------------
         function u = execute_FSF(self,x,r,sum_of_error)
-            u = -self.K.K*(x-self.x_e) + self.K.k_r*(r-self.y_r_e) - self.K.I*sum_of_error;
+            if isempty(sum_of_error),sum_of_error = 0;self.K.I = 0;end
+            u = -self.K.K*(controllers.get_error(self.x_e,x,self.x_is_angle)) + self.K.k_r*(controllers.get_error(self.y_r_e,r,self.r_is_angle)) - self.K.I*sum_of_error;
         end
         
         % Loopshaping -----------------------------------------------------
@@ -112,28 +121,17 @@ classdef controllers < handle
         end
         
         % General ---------------------------------------------------------
-        function F = saturate(self,F)
-            for i = 1:length(F)
-                if F(i) >= self.sat_lim.high
-                    F(i) = self.sat_lim.high;
-                    warning('SATURATING: High saturation limit reached.')
-                elseif F <= self.sat_lim.low
-                    F(i) = self.sat_lim.low;
-                    warning('SATURATING: Low saturation limit reached.')
-                end
-            end
-        end
-        
         function saturation_anti_windup(self,u_unsat,u_sat)
             if self.K.I ~= 0
-                self.intigrator_correction = self.intigrator_correction + 1./self.K.I.*(u_unsat - u_sat);
+                self.intigrator_correction = self.intigrator_correction + self.K.I^(-1)*(u_unsat - u_sat);
             end
         end
         
         function derivative_anti_windup(self,velocity,dt)
-            if abs(velocity) > self.windup_limit
-                self.intigrator_correction = self.intigrator_correction + dt*trapz(self.error(end-1:end));
-            end
+            self.intigrator_correction = dt*trapz(self.error(end-1:end),2);
+%             if abs(velocity) > self.windup_limit
+%                 self.intigrator_correction = self.intigrator_correction + dt*trapz(self.error(end-1:end),2);
+%             end
         end
         
         % Main ------------------------------------------------------------
@@ -141,7 +139,7 @@ classdef controllers < handle
             
             % Unpack
             dt = t - self.t;self.t = t;
-            r = r_in(self.r_in_indexes);
+            r = saturate(r_in(self.r_in_indexes),self.r_sat_lim+y_r_in(self.r_in_indexes));
             d = d(self.d_indexes);
             if isempty(d),d = 0;end
             y_r = y_r_in(self.r_in_indexes);
@@ -152,8 +150,8 @@ classdef controllers < handle
             % Anti-Windup
             self.derivative_anti_windup(y_r_dot,dt);
             
-            sum_of_error = dt*trapz(self.error) - self.intigrator_correction;
-               
+            sum_of_error = dt*trapz(self.error,2) - self.intigrator_correction;
+            sum_of_error = zeros(size(sum_of_error));
             % Execute Controller
             switch self.type
                 case self.OL
@@ -165,7 +163,7 @@ classdef controllers < handle
                     u = self.execute_PID(u_P,u_I,u_D);
                 case self.FSF
                     x = x_in(self.x_indexes);
-                    u = self.execute_FSF(x,r,sum_of_error);
+                    u = self.execute_FSF(x,r,sum_of_error(self.i_indexes));
                 case self.LS
                     r_filtered = self.prefilter.filter_next(r,t);
                     u = self.compensator.propigate(r_filtered,t);
@@ -177,8 +175,8 @@ classdef controllers < handle
             u_unsat = u + u_e - d;
 
             % Saturation & Anti-Windup
-            u_sat = self.saturate(u_unsat);
-            self.saturation_anti_windup(u_unsat,u_sat)
+            u_sat = saturate(u_unsat,self.u_sat_lim);
+%             self.saturation_anti_windup(u_unsat,u_sat)
             u = u_sat;
             
             % Cascaded controller
@@ -219,51 +217,84 @@ classdef controllers < handle
         function K = get_PID_gains()
         end
         
-        function [K,k_r,k_i] = get_FSF_gains(t_r,zeta,p_i,A,B,C_r)
+        function [K,k_r,k_i] = get_FSF_gains(t_r,zeta,i_indexes,A,B,C_r)
             w_n = 2.2./t_r;
 
+%             poles = eig(A);
             poles = [];
             for i = 1:length(t_r)
                 Delta = [1,2.*zeta(i).*w_n(i),w_n(i).^2];
                 poles = [poles;roots(Delta)];
             end
+%             poles = [poles;additional_poles];
+%             poles = -abs(real(eig(A)));
+%             
+%             for i = 1:length(poles)
+%                 if ismember(poles(i),poles([1:i-1,i+1:end]))
+%                     j = find(poles==poles(i));
+%                     poles(j) = poles(j).*(1+0.1*[-1;1]);
+%                 end
+%             end
+%             
+%             poles = poles*20;
+%             x_indexes = 1:length(A);
+%             while length(A)+length(i_indexes)>length(poles)
+%                 possible_states = intersect(find(vecnorm(C_r)==0),find(vecnorm(B,2,2)==0));
+%                 if isempty(possible_states)
+%                     possible_states = find(vecnorm(B,2,2)==0);
+%                 end
+%                 indexes = 1:length(A);
+%                 indexes(possible_states) = [];
+%                 [~,i] = min(vecnorm(A(indexes,possible_states)));
+%                 A(possible_states(i),:) = [];
+%                 A(:,possible_states(i)) = [];
+%                 B(possible_states(i),:) = [];
+%                 C_r(:,possible_states(i)) = [];
+%                 x_indexes(possible_states(i)) = [];
+%             end
+
+
+%             indexes = 1:12;
+%             remove = combnk(indexes,4);
+%             for i = 1:length(remove)
+%                 indexes2 = indexes;
+%                 indexes2(remove(i,:))= [];
+%                 A2 = A(indexes2,indexes2);
+%                 B2 = B(indexes2,:);
+%                 C2 = C_r(:,indexes2);
+% 
+%                 try
+% %                     controllers.is_controllable(A2,B2,C2)
+%                     
+%                     A_aug = [A2,zeros(length(A2),length(i_indexes));-C2(i_indexes,:),zeros(length(i_indexes))];
+%                     B_aug = [B2;zeros(length(i_indexes),length(B2(1,:)))];
+% 
+%                     K = place(A_aug,B_aug,poles);
+%                     
+%                     disp(remove(i,:))
+%                 end
+%             end
+%             
+%             k_i = zeros(length(i_indexes));
+%             for i = fliplr(1:length(i_indexes))
+%                 k_i(:,i_indexes(i)) = K(:,end);
+%                 K = K(:,1:end-1);
+%             end
+%             
+%             k_r = -1./(C2*((A2-B2*K)^-1)*B2);
+
+            A_aug = [A,zeros(length(A),length(i_indexes));-C_r(i_indexes,:),zeros(length(i_indexes))];
+            B_aug = [B;zeros(length(i_indexes),length(B(1,:)))];
             
-%             pertinant_states = [];
-%             B2 = B;
-%             C2 = C_r;
-%             for i = 1:length(poles)/2
-%                 most_changed = find(abs(C2)==max(abs(C2)),1);
-%                 pertinant_states = [pertinant_states,most_changed];
-%                 C2(most_changed) = 0;
-%                 B2(most_changed) = 0;
-%             end
-%             for i = 1:length(poles)/2
-%                 most_changed = find(abs(B2)==max(abs(B2)),1);
-%                 pertinant_states = [pertinant_states,most_changed];
-%                 C2(most_changed) = 0;
-%                 B2(most_changed) = 0;
-%             end
-%             pertinant_states = sort(pertinant_states);
-%             A = A(pertinant_states,pertinant_states);
-%             B = B(pertinant_states,:);
-%             C_r = C_r(:,pertinant_states);
-
-            if p_i ~= 0
-                poles = [poles;p_i];
-                A = [A,zeros(length(A),1);-C_r,0];
-                B = [B;0];
+            K = place(A_aug,B_aug,poles);
+            
+            k_i = zeros(length(i_indexes));
+            for i = fliplr(1:length(i_indexes))
+                k_i(:,i_indexes(i)) = K(:,end);
+                K = K(:,1:end-1);
             end
-
-            K = place(A,B,poles);
-
-            if p_i == 0
-                k_r = -1./(C_r*((A-B*K)^-1)*B);
-                k_i = 0;
-            elseif p_i ~= 0
-                k_i = K(end);
-                K = K(1:end-1);
-                k_r = 1;
-            end
+            
+            k_r = -1./(C_r*((A-B*K)^-1)*B);
         end
         
         function is_controllable(A,B,C)
