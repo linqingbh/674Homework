@@ -4,7 +4,7 @@
 %% Simulation
 if settings.simulate
     % Object for display of results
-    [animation] = animate(core); 
+    [animation,core.param.animation_fig] = animate(core); 
     
     % Object simulating the system
     system = dynamics(core);

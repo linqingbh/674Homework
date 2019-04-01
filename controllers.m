@@ -71,7 +71,7 @@ classdef controllers < handle
             self.r_out_indexes = get_indexes(param.r_names,control.u_names);
             self.u_indexes = get_indexes(param.u_names,control.u_names);
             self.i_indexes = get_indexes(control.r_names,control.i_names);
-            self.x_indexes = control.x_indexes;
+%             self.x_indexes = control.x_indexes;
             
             % Param
             self.K = control.K;
@@ -97,7 +97,7 @@ classdef controllers < handle
                     self.plan = control.plan;
                 case self.PID
                 case self.FSF
-                    [self.K.K,self.K.k_r,self.K.I] = controllers.get_FSF_gains(control.t_r,control.zeta,self.i_indexes,param.A(self.x_indexes,self.x_indexes),param.B(self.x_indexes,self.u_indexes),param.C(self.r_in_indexes,self.x_indexes));
+                    [self.K.K,self.K.k_r,self.K.I] = controllers.get_FSF_gains(control.t_r,control.zeta,self.i_indexes,control.poles,param.A(self.x_indexes,self.x_indexes),param.B(self.x_indexes,self.u_indexes),param.C(self.r_in_indexes,self.x_indexes));
                 case self.LS
                     self.prefilter = control.prefilter;
                     self.compensator = control.compensator;
@@ -112,7 +112,7 @@ classdef controllers < handle
         % Full State Feadback ---------------------------------------------
         function u = execute_FSF(self,x,r,sum_of_error)
             if isempty(sum_of_error),sum_of_error = 0;self.K.I = 0;end
-            u = -self.K.K*(controllers.get_error(self.x_e,x,self.x_is_angle)) + self.K.k_r*(controllers.get_error(self.y_r_e,r,self.r_is_angle)) - self.K.I*sum_of_error;
+            u = -self.K.K*(x-self.x_e) + self.K.k_r*(r-self.y_r_e) - self.K.I*sum_of_error;
         end
         
         % Loopshaping -----------------------------------------------------
@@ -128,15 +128,12 @@ classdef controllers < handle
         end
         
         function derivative_anti_windup(self,velocity,dt)
-            self.intigrator_correction = dt*trapz(self.error(end-1:end),2);
-%             if abs(velocity) > self.windup_limit
-%                 self.intigrator_correction = self.intigrator_correction + dt*trapz(self.error(end-1:end),2);
-%             end
+            self.error((abs(velocity) >= self.windup_limit),end) = 0;
         end
         
         % Main ------------------------------------------------------------
         function [u,r_out] = control(self,x_in,y_r_in,y_r_dot_in,r_in,d,t)
-            
+
             % Unpack
             dt = t - self.t;self.t = t;
             r = saturate(r_in(self.r_in_indexes),self.r_sat_lim+y_r_in(self.r_in_indexes));
@@ -151,7 +148,7 @@ classdef controllers < handle
             self.derivative_anti_windup(y_r_dot,dt);
             
             sum_of_error = dt*trapz(self.error,2) - self.intigrator_correction;
-            sum_of_error = zeros(size(sum_of_error));
+            
             % Execute Controller
             switch self.type
                 case self.OL
@@ -217,16 +214,18 @@ classdef controllers < handle
         function K = get_PID_gains()
         end
         
-        function [K,k_r,k_i] = get_FSF_gains(t_r,zeta,i_indexes,A,B,C_r)
+        function [K,k_r,k_i] = get_FSF_gains(t_r,zeta,i_indexes,additional_poles,A,B,C_r)
             w_n = 2.2./t_r;
 
 %             poles = eig(A);
+
             poles = [];
             for i = 1:length(t_r)
                 Delta = [1,2.*zeta(i).*w_n(i),w_n(i).^2];
                 poles = [poles;roots(Delta)];
             end
-%             poles = [poles;additional_poles];
+            poles = [poles;additional_poles];
+
 %             poles = -abs(real(eig(A)));
 %             
 %             for i = 1:length(poles)
@@ -254,8 +253,8 @@ classdef controllers < handle
 %             end
 
 
-%             indexes = 1:12;
-%             remove = combnk(indexes,4);
+%             indexes = 1:5;
+%             remove = combnk(indexes,1);
 %             for i = 1:length(remove)
 %                 indexes2 = indexes;
 %                 indexes2(remove(i,:))= [];
@@ -283,8 +282,16 @@ classdef controllers < handle
 %             
 %             k_r = -1./(C2*((A2-B2*K)^-1)*B2);
 
-            A_aug = [A,zeros(length(A),length(i_indexes));-C_r(i_indexes,:),zeros(length(i_indexes))];
+            A_aug = [A,zeros(length(A),length(i_indexes));
+                -C_r(i_indexes,:),eye(length(i_indexes))];
             B_aug = [B;zeros(length(i_indexes),length(B(1,:)))];
+%             
+%             figure(4),clf
+%             hold on
+%             plot(poles,'.k')
+%             plot(eig(A_aug),'.r')
+%             grid on
+%             hold off
             
             K = place(A_aug,B_aug,poles);
             
@@ -293,8 +300,14 @@ classdef controllers < handle
                 k_i(:,i_indexes(i)) = K(:,end);
                 K = K(:,1:end-1);
             end
+            k_r = -inv(C_r*(inv(A-B*K))*B);
             
-            k_r = -1./(C_r*((A-B*K)^-1)*B);
+%             k_r = zeros(length(C_r(:,1)),1);
+%             for i = 1:length(C_r(:,1))
+%                 k_r(i) = -1./(C_r(i,:)*((A-B(:,i)*K(i,:))^-1)*B(:,i));
+%             end
+%             k_r = diag(k_r);
+%             k_r = zeros(length(C_r(:,1)));
         end
         
         function is_controllable(A,B,C)

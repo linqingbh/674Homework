@@ -184,16 +184,7 @@ function param = aircraft(name,param)
     P.C_r_r = P.Gamma(4)*P.C_l_r + P.Gamma(8)*P.C_n_r;
     P.C_r_delta_a = P.Gamma(4)*P.C_l_delta_a + P.Gamma(8)*P.C_n_delta_a;
     P.C_r_delta_r = P.Gamma(4)*P.C_l_delta_r + P.Gamma(8)*P.C_n_delta_r;
-    
-    P.L_p = P.rho*P.V_design*P.S_wing*P.b^2/4*P.C_p_p;
-    P.L_r = P.rho*P.V_design*P.S_wing*P.b^2/4*P.C_p_r;
-    P.L_delta_a = P.rho*P.V_design^2*P.S_wing*P.b/2*P.C_p_delta_a;
-    P.L_delta_r = P.rho*P.V_design^2*P.S_wing*P.b/2*P.C_p_delta_r;
-    P.N_p = P.rho*P.V_design*P.S_wing*P.b^2/4*P.C_r_p;
-    P.N_r = P.rho*P.V_design*P.S_wing*P.b^2/4*P.C_r_r;
-    P.N_delta_a = P.rho*P.V_design^2*P.S_wing*P.b/2*P.C_r_delta_a;
-    P.N_delta_r = P.rho*P.V_design^2*P.S_wing*P.b/2*P.C_r_delta_r;
-    
+
     param.aircraft = P;
     for fn = fieldnames(P)'
        param.(fn{1}) = P.(fn{1});

@@ -15,7 +15,7 @@ param = aircraft("aerosnode",param);
 
 % System Limits
 param.h_sat_lim = 3;
-param.chi_sat_lim = 45*pi/180;
+param.chi_sat_lim = 15*pi/180;
 param.theta_sat_lim= 45*pi/180;
 param.phi_sat_lim = 45*pi/180;
 
@@ -28,8 +28,6 @@ param.delta_t_sat_lim = [0,1];
 param.take_off_alt = 10;
 param.take_off_pitch = 15*pi/180;
 
-param.fillet_radius = 80;
-
 % State Description
 param.d_names = ["w_n";"w_e";"w_d";"w_n_dot";"w_e_dot";"w_d_dot"];
 param.x_names = ["p_{n}";"p_{e}";"p_{d}";"u";"v";"w";"\phi";"\theta";"\psi";"p";"q";"r"];
@@ -40,7 +38,7 @@ param.u_names = ["delta_a";"delta_e";"delta_r";"delta_t"];
 
 param.x_is_angle = [false;false;false;false;false;false;true;true;true;false;false;false];
 param.m_is_angle = [false;false;false;false;false;false;false;true;false;false;false;true;false;false;false;false];
-param.r_is_angle = [true;true;false;true;true;false];
+param.r_is_angle = [true;true;false;true;false;false];
 
 %% Uncertainty
 
@@ -50,8 +48,8 @@ param.D_in_param.random  = 0.2.*[];
 param.D_in_param.bias    = 0.0.*[];
 
 % Wind
-base = [0;0;0];
-gust = wind.steady;
+base = [1;0;0];
+gust = wind.light_lowalt;
 param.wind = wind(gust,base,param.V_design);
 
 % Magnetic
@@ -60,8 +58,11 @@ param.declination = 2.9*pi/180;
 %% Simulation Dimensions
 
 % Aircraft Dimensions
-scale = 100;
-city_scale = 4;
+city_scale = 8;
+scale = 10*city_scale;
+
+
+param.fillet_radius = 16*city_scale;
 
 % Wing
 param.wing_w = 1.5*scale;
@@ -86,13 +87,13 @@ param.course_vec_length = 2*scale;
 % Simulation
 settings.start       = 0;      % s
 settings.step        = 0.02;   % s
-settings.end         = 10;     % s
+settings.end         = 150;     % s
 t = settings.start:settings.step:settings.end;
 
 settings.playback_rate  = 0.5;
-settings.window         = [-1000,1000,-1000,1000,0,200]; % m % add city scale
+settings.window         = [-100*city_scale,400*city_scale,-100*city_scale,400*city_scale,0,500];
 settings.view           = [45,45];
-settings.gph_per_img    = 4;
+settings.gph_per_img    = 6;
 settings.labels         = ["p_{e} - Latitude (m)","p_{n} - Longitude (m)","h - Altitude (m)"];
 
 %% World
@@ -263,7 +264,7 @@ function [x_dot,d] = eqs_motion(t,x,input,param)
     w_a = V_a_b(3);
     alpha = atan2(w_a,u_a);
     V_a = sqrt(u_a^2+v_a^2+w_a^2);
-    beta = atan2(v_a,sqrt(u_a^2+w_a^2));
+    beta = asin(v_a/V_a);
 
     % Aerodynamics --------------------------------------------------------
     
@@ -428,49 +429,49 @@ function [poly,poly_colors,lines,line_colors,points,point_colors,vecs,vec_colors
     vecs = {};
     vec_colors = {};
     
-%     path = core.subscribe_history('path');
+    path = core.subscribe_history('path');
         
-%     w = core.settings.window(2)-core.settings.window(1);
-%     l = core.settings.window(4)-core.settings.window(3);
-%     h  = core.settings.window(6)-core.settings.window(5);
-% 
-%     lines{end+1} = previous_positions(:,1);
-%     line_colors{end+1} = "--g";
-%     if ~isempty(path)
-%         lines{end} = path;
-%     end
-%     
-% 
-%     W = core.subscribe_history('W');
-%     points{end+1} = [];
-%     point_colors{end+1} = ".k";
-%     if ~isempty(W)
-%         points{end} = [points{1},W(1:3,:)];
-% %         if length(W(:,1)) == 4
-% %             for i = 1:length(W(1,:))
-% %                 vecs{end+1} = [W(1:3,i),core.param.course_vec_length*[cos(W(4,i));sin(W(4,i));0]];
-% %                 vec_colors{end+1} = "-g";
-% %             end
-% %         end
-%     else
-%         % Add vecs here
-%         points{end} = previous_positions(:,1);
-%     end
-%     
-%     if first_call
-%         for i = 1:length(core.param.world.obsticals)
-%             poly{end+1} = core.param.world.obsticals(i).corners(:,[1,2,6,5]);
-%             poly_colors{end+1} = 'b';
-%             poly{end+1} = core.param.world.obsticals(i).corners(:,[2,3,7,6]);
-%             poly_colors{end+1} = 'b';
-%             poly{end+1} = core.param.world.obsticals(i).corners(:,[3,4,8,7]);
-%             poly_colors{end+1} = 'b';
-%             poly{end+1} = core.param.world.obsticals(i).corners(:,[4,1,5,8]);
-%             poly_colors{end+1} = 'b';
-%             poly{end+1} = core.param.world.obsticals(i).corners(:,5:8);
-%             poly_colors{end+1} = 'b';
+    w = core.settings.window(2)-core.settings.window(1);
+    l = core.settings.window(4)-core.settings.window(3);
+    h  = core.settings.window(6)-core.settings.window(5);
+
+    lines{end+1} = previous_positions(:,1);
+    line_colors{end+1} = "--g";
+    if ~isempty(path)
+        lines{end} = path;
+    end
+    
+
+    W = core.subscribe_history('W');
+    points{end+1} = [];
+    point_colors{end+1} = ".k";
+    if ~isempty(W)
+        points{end} = [points{1},W(1:3,:)];
+%         if length(W(:,1)) == 4
+%             for i = 1:length(W(1,:))
+%                 vecs{end+1} = [W(1:3,i),core.param.course_vec_length*[cos(W(4,i));sin(W(4,i));0]];
+%                 vec_colors{end+1} = "-g";
+%             end
 %         end
-%     end
+    else
+        % Add vecs here
+        points{end} = previous_positions(:,1);
+    end
+    
+    if first_call
+        for i = 1:length(core.param.world.obsticals)
+            poly{end+1} = core.param.world.obsticals(i).corners(:,[1,2,6,5]);
+            poly_colors{end+1} = 'b';
+            poly{end+1} = core.param.world.obsticals(i).corners(:,[2,3,7,6]);
+            poly_colors{end+1} = 'b';
+            poly{end+1} = core.param.world.obsticals(i).corners(:,[3,4,8,7]);
+            poly_colors{end+1} = 'b';
+            poly{end+1} = core.param.world.obsticals(i).corners(:,[4,1,5,8]);
+            poly_colors{end+1} = 'b';
+            poly{end+1} = core.param.world.obsticals(i).corners(:,5:8);
+            poly_colors{end+1} = 'b';
+        end
+    end
     
     for i = 1:12
         poly{i} = poly{i}.';
@@ -538,7 +539,7 @@ function [y_r_out,y_r_dot_out,y_r_ddot_out] = get_y_r(z,x,d,param,x_dot)
     
     V_a = sqrt(sum(V_a_b.^2));
     V_a_dot = sqrt(sum(V_a_b_dot.^2));
-    beta = atan2(v_a,sqrt(u_a^2+w_a^2));
+    beta = sin(v_a/V_a);
     chi = atan2(V_g_g(2),V_g_g(1));
     beta_dot = 1/(v_a^2/(u_a^2+w_a^2)+1)*(v_a_dot/sqrt(u_a^2+w_a^2)-v_a*(u_a*u_a_dot+w_a*w_a_dot)/(u_a^2+w_a^2)^(3/2));
     
@@ -549,6 +550,11 @@ function [y_r_out,y_r_dot_out,y_r_ddot_out] = get_y_r(z,x,d,param,x_dot)
     theta_dot = rotational_velocity(2);
     chi_dot = rotational_velocity(3);
     
+    % fudge
+    if sign(chi)~=sign(psi)
+        chi = psi;
+    end
+%     chi = psi;
     y_r_out(1,1) = chi;
     y_r_out(2,1) = phi;
     y_r_out(3,1) = -p_d;

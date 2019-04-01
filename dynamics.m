@@ -54,9 +54,9 @@ classdef dynamics < handle
             self.observers = functions.observers;
             self.get_y_m = functions.get_y_m;
             self.get_y_r = functions.get_y_r;
-%             self.planner = functions.planner;
-%             self.manager = functions.manager;
-%             self.followers = functions.followers;
+            self.planner = functions.planner;
+            self.manager = functions.manager;
+            self.followers = functions.followers;
             self.controllers = functions.controllers;
             
             % Uncertian Param
@@ -78,8 +78,8 @@ classdef dynamics < handle
             
             % Iterate through each timestep
             for i = 2:length(t)
-                self.r = self.command(:,i);
-                
+%                 self.r = self.command(:,i);
+
                 % Propigate Dynamic Model
                 [self.x,x_dot,d] = rk4(@(time,state) self.eqs_motion(time,state,self.u,self.param),[t(i-1),t(i)],self.x);
 
@@ -109,24 +109,35 @@ classdef dynamics < handle
                 [y_r,y_r_dot] = self.get_y_r(z,self.x,d,self.param);
 
                 % Path Planner
-%                 W = self.planner.plan(x_hat,self.pe);
-%                 
-%                 % Path Manager
-%                 leg = self.manager.manage(W,x_hat);
-%                 
-%                 % Path Follower
-%                 self.r = zeros(size(self.param.r_names));
-%                 for j = 1:length(self.followers)
-%                     self.r(self.followers(j).r_indexes) = self.followers(j).follow(leg,x_hat);
-%                 end
+                W = self.planner.plan(x_hat,self.command);
                 
+                % Path Manager
+                leg = self.manager.manage(W,x_hat);
+                
+                % Path Follower
+                self.r = zeros(size(self.param.r_names));
+                for j = 1:length(self.followers)
+                    self.r(self.followers(j).r_indexes) = self.followers(j).follow(leg,x_hat);
+                end
+                
+                if t(i) >=6.84
+                    throw = 1;
+                end
+                
+
+
                 % Implimennt controller
                 for j = 1:length(self.controllers)
                     [self.u(self.controllers(j).u_indexes),self.r] = self.controllers(j).control(x_hat,y_r_hat,y_r_dot_hat,self.r,d_hat,t(i));
                 end
 
+%                 self.u(1) = self.param.u_0(1);
+%                 self.u(2) = self.param.u_0(2);
+%                 self.u(3) = self.param.u_0(3);
+%                 self.u(4) = self.param.u_0(4);
+                
                 % Save history
-%                 self.core.publish_update('W',W);
+                self.core.publish_update('W',W);
                 self.core.publish('d',d);
                 self.core.publish('x',self.x);
                 self.core.publish('x_dot',x_dot);
@@ -141,7 +152,7 @@ classdef dynamics < handle
                 self.core.publish('y_r_hat',y_r_hat);
                 self.core.publish('y_r_dot',y_r_dot);
                 self.core.publish('y_r_dot_hat',y_r_dot_hat);
-%                 self.core.publish_update('path',leg.line);
+                self.core.publish_update('path',leg.line);
                 self.core.publish_specific('r',self.r,i);
                 self.core.publish('u',self.u);
                 

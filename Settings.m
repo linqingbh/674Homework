@@ -17,11 +17,11 @@ rng('default')
 Parameters;
 
 %% Generate World
-% obstical_count = 25;
-% spacing = 50*city_scale;
-% width = 50*city_scale;
-% max_height = 250;
-% param.world = generate_world(obstical_count,spacing,width,max_height,settings);
+obstical_count = 25;
+spacing = 50*city_scale;
+width = 50*city_scale;
+max_height = 250;
+param.world = generate_world(obstical_count,spacing,width,max_height,settings);
 
 %% Initial Conditions
 % Trim
@@ -50,57 +50,58 @@ param.default.q = [0;0;1];
 param.default.line = draw_circle(param.default.b,param.default.rho);
 
 %% Input Parameters
-input       = 'line';  % Type of signal
-period      = 10;        % Period of signal input
-amplitude   = 1;        % Amplitude of signal input
-offset      = 0;            % Offset from 0
-phase_delay = 0;        % phase delay of function in rad
-line = function_generator(input,period,amplitude,offset,phase_delay,t);
-input       = 'square';  % Type of signal
-period      = 40;        % Period of signal input
-amplitude   = 0.5;        % Amplitude of signal input
-offset      = 0;            % Offset from 0
-phase_delay = 0;        % phase delay of function in rad
-square1 = function_generator(input,period,amplitude,offset,phase_delay,t);
-phase_delay = pi/3;        % phase delay of function in rad
-square2 = function_generator(input,period,amplitude,offset,phase_delay,t);
-phase_delay = 2*pi/3;        % phase delay of function in rad
-square3 = function_generator(input,period,amplitude,offset,phase_delay,t);
-% Commanded Inputs [chi,phi,h,theta,beta,V_a]
-param.command = [line;line;line+100;line;line;line + param.trim.V_a];
-param.pe = [300*city_scale;300*city_scale;-100];
+% input       = 'line';  % Type of signal
+% period      = 10;        % Period of signal input
+% amplitude   = 1;        % Amplitude of signal input
+% offset      = 0;            % Offset from 0
+% phase_delay = 0;        % phase delay of function in rad
+% line = function_generator(input,period,amplitude,offset,phase_delay,t);
+% input       = 'square';  % Type of signal
+% period      = 40;        % Period of signal input
+% amplitude   = 0.5;        % Amplitude of signal input
+% offset      = 0.5;            % Offset from 0
+% phase_delay = 0;        % phase delay of function in rad
+% square1 = function_generator(input,period,amplitude,offset,phase_delay,t);
+% offset = 0.5;
+% phase_delay = pi/3;        % phase delay of function in rad
+% square2 = function_generator(input,period,amplitude,offset,phase_delay,t);
+% phase_delay = 2*pi/3;        % phase delay of function in rad
+% square3 = function_generator(input,period,amplitude,offset,phase_delay,t);
+% % Commanded Inputs [chi,phi,h,theta,beta,V_a]
+% param.command = [square1*pi;line;square2*50+100;line;line;square3*5 + param.trim.V_a];
+param.command = [300*city_scale;300*city_scale;-100];
 
 %% Path Planner
-% plan.type = path_planner.p2p;
-% plan.collision_step = 0.1;
-% plan.margin_of_saftey = 0;
-% plan.height = -param.x_0(3,1);
-% plan.distance = param.fillet_radius*3;
-% plan.x_names = ["p_{n}";"p_{e}";"p_{d}";"\psi"];
-% plan.max_iterations = 500; %Also acts as number of look ahead steps.
-% plan.plot = true;
-% core.param = param;
-% plan.circle = 200;
-% functions.planner(1) = path_planner(plan,core);
-% 
-% %% Path Follower
-% core.param = param;% Make unessisary
-% follow.x_names = ["p_{n}";"p_{e}";"p_{d}"];
-% follow.r_names = ["\chi","h","V_a"];
-% follow.k.line = 0.01;
-% follow.k.orbit = 2;
-% follow.chi_inf = pi/2;
-% functions.followers(1) = path_follower(follow,core);
-% 
-% %% Path Manager
-% manage.type = path_manager.dubins;
-% manage.planner = functions.planner(1);
-% manage.x_names = ["p_{n}";"p_{e}";"p_{d}";'\psi'];
-% functions.manager(1) = path_manager(manage,core);
+plan.type = path_planner.p2p;
+plan.collision_step = 0.1*city_scale;
+plan.margin_of_saftey = 0;
+plan.height = -param.x_0(3,1);
+plan.distance = param.fillet_radius*4;
+plan.x_names = ["p_{n}";"p_{e}";"p_{d}";"\psi"];
+plan.max_iterations = 500; %Also acts as number of look ahead steps.
+plan.plot = true;
+core.param = param;
+plan.circle = 200;
+functions.planner(1) = path_planner(plan,core);
+
+%% Path Follower
+core.param = param;% Make unessisary
+follow.x_names = ["p_{n}";"p_{e}";"p_{d}"];
+follow.r_names = ["\chi","h","V_a"];
+follow.k.line = 0.01;
+follow.k.orbit = 2;
+follow.chi_inf = pi/2;
+functions.followers(1) = path_follower(follow,core);
+
+%% Path Manager
+manage.type = path_manager.dubins;
+manage.planner = functions.planner(1);
+manage.x_names = ["p_{n}";"p_{e}";"p_{d}";'\psi'];
+functions.manager(1) = path_manager(manage,core);
 
 %% Simulation Parameters
-settings.active_fig  = 1;
-settings.animation   = false;
+settings.active_fig  = 2;
+settings.animation   = true;
 settings.plot        = true;
 settings.simulate    = true;
 settings.progress_update = true;
@@ -119,7 +120,7 @@ settings.plot_names  = {% ["p_{n} - Longitude (m)","p_{n}"];
                         ["\delta_{e} - Elevator (rad)","delta_e"];
                         ["\delta_{r} - Ruder (rad)","delta_r"];
                         ["\delta_{t} - Throttle (%)","delta_t"];
-%                         ["y_{r}_{dot} - Rate of Change","y_r_dot_{\chi}"]%,"y_r_dot_{\theta}","y_r_dot_{\chi}","y_r_dot_{\phi}","y_r_dot_{\beta}","y_r_dot_{V_a}"]
+%                         ["y_{r}_{dot} - Rate of Change","y_r_dot_{h}"]%,"y_r_dot_{\theta}","y_r_dot_{\chi}","y_r_dot_{\phi}","y_r_dot_{\beta}","y_r_dot_{V_a}"]
 
 %                         ["p_{n} - Longitude (m)","p_{n}","z_hat_{GPS_n}","z_f_{GPS_n}"];
 %                         ["p_{e} - Latitude (m)","p_{e}","z_hat_{GPS_e}","z_f_{GPS_e}"];
@@ -308,7 +309,7 @@ assumed_param.wind = wind(wind.steady,[0;0;0],param.aircraft.V_design);
 
 %% State Observers
 
-observe.type = observers.exact;
+observe.type = observers.ekf;
 observe.x_names = param.x_names;
 observe.r_names = [];
 observe.m_names = param.m_names;%["p_{n}";"p_{e}";"p_{d}";"u_a";"Accel_x";"Accel_y";"Accel_z";"\psi";"p";"q";"r";"\chi";"V_gh"];
@@ -348,7 +349,7 @@ zeta_chi = 0.707;
 e_max_phi = 45*pi/180;
 zeta_phi = 0.707;
 
-e_max_beta = 0.1*pi/180;
+e_max_beta = 45*pi/180;
 zeta_beta = 0.707;
 
 W_h = 25;
@@ -381,7 +382,7 @@ control.d_names = [];
 
 
 control.type = controllers.FSF;
-control.windup_limit = 0;
+control.windup_limit = [0.01;1;Inf;1];
 control.r_sat_lim = [-param.chi_sat_lim,param.chi_sat_lim;
                      -param.h_sat_lim,param.h_sat_lim;
                      -Inf,Inf;
@@ -392,43 +393,42 @@ control.u_sat_lim = [-param.delta_a_sat_lim,param.delta_a_sat_lim
                      param.delta_t_sat_lim];
 control.t_r = 2.2./[w_n_chi,w_n_phi,w_n_beta,w_n_h,w_n_theta,w_n_V_2];
 control.zeta = [zeta_chi,zeta_phi,zeta_beta,zeta_h,zeta_theta,zeta_V_2];
-control.poles = [];
+control.poles = [-0.1;-0.1];
 control.K = struct;
 control.r_names = ["\chi","h","\beta","V_a"];
 control.u_names = param.u_names;
 control.i_names = ["\chi","h","\beta","V_a"];
-control.x_names = param.x_names;
-control.x_indexes = 1:12;
-control.x_indexes([1,2,6,7]) = [];
+control.x_names = param.x_names(3:12);
 core.functions.controllers(1) = controllers(control,core);
 
 % Lateral
 % control.type = controllers.FSF;
-% control.windup_limit = 0.3;
-% control.r_sat_lim = [param.chi_sat_lim;0];
+% control.windup_limit = [0.01;0.0001];
+% control.r_sat_lim = [param.chi_sat_lim;Inf];
 % control.u_sat_lim = [param.delta_a_sat_lim;param.delta_r_sat_lim];
-% control.t_r = [t_r_chi,t_r_phi,t_r_beta];
-% control.zeta = [t_r_chi,t_r_phi];
-% control.poles = [];
-% control.integrator_count = 2;
+% control.t_r = 2.2./[w_n_chi,w_n_phi,w_n_beta];
+% control.zeta = [zeta_chi,zeta_phi,zeta_beta];
 % control.r_names = ["\chi","\beta"];
 % control.u_names = ["delta_a","delta_r"];
 % control.x_names = ["v","\phi","\psi","p","r"];
+% control.i_names = ["\chi","\beta"];
+% control.K = struct;
 % core.functions.controllers(1) = controllers(control,core);
 % 
 % % Longitudnal
 % control.type = controllers.FSF;
-% control.windup_limit = 1;
-% control.r_sat_lim = [-param.chi_sat_lim,param.chi_sat_lim;15,Inf];
+% control.windup_limit = [0;0];
+% control.r_sat_lim = [param.h_sat_lim;Inf];
 % control.u_sat_lim = [-param.delta_e_sat_lim,param.delta_e_sat_lim;param.delta_t_sat_lim];
-% control.t_r = [];
-% control.zeta = [];
-% control.poles = [];
-% control.integrator_count = 2;
+% control.t_r = 2.2./[w_n_h,w_n_theta,w_n_V];
+% control.zeta = [zeta_h,zeta_theta,zeta_V];
+% control.poles = -0.1;
 % control.r_names = ["h","V_a"];
 % control.u_names = ["delta_e","delta_t"];
 % control.x_names = ["p_{d}","u","w","\theta","q"]; % maybe try u instead of w
-% core.functions.controllers(2) = controllers(control,core);
+% control.i_names = ["h","V_a"];
+% control.K = struct;
+% core.functions.controllers(1) = controllers(control,core);
 
 
 

@@ -137,6 +137,7 @@ classdef path_planner < handle
                                 G(end).C2end = G(end).C;
                                 if self.plot,self.plot_handles(end+1) = plot3(path_end(2,:),path_end(1,:),-path_end(3,:),'-c','LineWidth',1.5);end
                                 if self.plot,drawnow,end
+                                break
                             end
                         catch
                             [path_end,~,~,~,~,~,q_end,~,~,~,L] = path_manager.calculate_dubins(G(G(end).E).V,G(G(end).E).chi,self.R,pe);
@@ -150,6 +151,7 @@ classdef path_planner < handle
                                 G(end).C2end = G(end-1).C;
                                 if self.plot,self.plot_handles(end+1) = plot3(path_end(2,:),path_end(1,:),-path_end(3,:),'-c','LineWidth',1.5);end
                                 if self.plot,drawnow,end
+                                break
                             end
                         end
                     end
@@ -174,8 +176,6 @@ classdef path_planner < handle
                     end
                     if self.plot,self.plot_handles(end+1) = plot3(choosen_path(2,:),choosen_path(1,:),-choosen_path(3,:),'--g','LineWidth',2);end
                     W = self.smooth(W);
-                    disp("Paused: press any key to continue...")
-                    pause
                     if self.plot,view(self.core.settings.view),end
                     if self.plot,delete(self.plot_handles);self.plot_handles=[];end
                 end
